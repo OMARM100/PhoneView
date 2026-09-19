@@ -23,10 +23,9 @@ from core.dependency_checker import DependencyChecker
 
 PHONEVIEW_QSS = """
 QDialog {
-    background-color: #121212;
+    background: #121212;
     color: #E0E0E0;
     font-family: "DejaVu Sans", "Noto Sans", sans-serif;
-    font-size: 12px;
 }
 
 QLabel {
@@ -34,35 +33,92 @@ QLabel {
     background: transparent;
 }
 
+QLabel#Eyebrow {
+    color: #7D8AA0;
+    font-size: 10px;
+    font-weight: 700;
+}
+
 QLabel#Subtitle,
 QLabel#Muted {
-    color: #9E9E9E;
+    color: #8D96A5;
+}
+
+QLabel#SectionTitle {
+    color: #E0E0E0;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QLabel#StatusTitle {
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QLabel#Percent {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 700;
 }
 
 QFrame#Card {
-    background-color: #1E1E1E;
+    background: #1E1E1E;
     border: 1px solid #2A2A2A;
-    border-radius: 12px;
+    border-radius: 14px;
+}
+
+QFrame#StatusCard {
+    background: #1E1E1E;
+    border: 1px solid #303030;
+    border-radius: 16px;
+}
+
+QFrame#StatusAccent {
+    background: #2979FF;
+    border-radius: 3px;
 }
 
 QFrame#DependencyRow {
-    background-color: #181818;
+    background: #191919;
     border: 1px solid #292929;
-    border-radius: 8px;
+    border-radius: 10px;
+}
+
+QFrame#DependencyRow:hover {
+    background: #202020;
+    border-color: #343434;
+}
+
+QLabel#DependencyName {
+    color: #E0E0E0;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+QLabel#DependencyState {
+    color: #8D96A5;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+QLabel#StatusIcon {
+    color: #8D96A5;
+    font-size: 14px;
+    font-weight: 700;
 }
 
 QProgressBar {
-    background-color: #2A2A2A;
+    background: #2B2B2B;
     border: none;
     border-radius: 4px;
     min-height: 8px;
     max-height: 8px;
     height: 8px;
-    text-align: center;
 }
 
 QProgressBar::chunk {
-    background-color: #2979FF;
+    background: #2979FF;
     border-radius: 4px;
 }
 
@@ -72,79 +128,82 @@ QScrollArea {
 }
 
 QScrollBar:vertical {
-    background: #181818;
-    width: 8px;
-    margin: 2px;
-    border-radius: 4px;
+    background: transparent;
+    width: 6px;
+    margin: 2px 0;
 }
 
 QScrollBar::handle:vertical {
-    background: #424242;
+    background: #3A3A3A;
     min-height: 24px;
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: #555555;
+    background: #505050;
 }
 
 QScrollBar::add-line:vertical,
 QScrollBar::sub-line:vertical {
-    height: 0px;
+    height: 0;
 }
 
 QTextEdit#ActivityLog {
-    background-color: #0D0D0D;
-    color: #BDBDBD;
-    border: 1px solid #292929;
-    border-radius: 10px;
-    padding: 8px;
+    background: #101010;
+    color: #AEB7C4;
+    border: 1px solid #2B2B2B;
+    border-radius: 12px;
+    padding: 10px;
     font-family: "DejaVu Sans Mono", "Noto Sans Mono", monospace;
-    font-size: 11px;
+    font-size: 10px;
     selection-background-color: #2979FF;
     selection-color: #FFFFFF;
 }
 
 QPushButton {
-    min-height: 36px;
-    padding: 0 16px;
-    border-radius: 8px;
-    border: 1px solid #383838;
-    background-color: #242424;
-    color: #E0E0E0;
-    font-weight: 600;
+    min-height: 34px;
+    padding: 0 15px;
+    border-radius: 9px;
+    border: 1px solid #363636;
+    background: #252525;
+    color: #D7DCE3;
+    font-size: 10px;
+    font-weight: 700;
 }
 
 QPushButton:hover {
-    background-color: #303030;
+    background: #303030;
+    border-color: #444444;
 }
 
 QPushButton:pressed {
-    background-color: #191919;
+    background: #1B1B1B;
 }
 
 QPushButton:disabled {
-    background-color: #1A1A1A;
-    color: #666666;
+    background: #1A1A1A;
     border-color: #252525;
+    color: #626A75;
 }
 
 QPushButton#Primary {
-    background-color: #2979FF;
+    background: #2979FF;
     border-color: #2979FF;
     color: #FFFFFF;
+    min-width: 130px;
 }
 
 QPushButton#Primary:hover {
-    background-color: #448AFF;
+    background: #448AFF;
+    border-color: #448AFF;
 }
 
 QPushButton#Primary:pressed {
-    background-color: #1E63D8;
+    background: #1E63D8;
 }
 
 QPushButton#Primary:disabled {
-    background-color: #183663;
+    background: #183663;
     border-color: #183663;
     color: #607DAA;
 }
@@ -175,66 +234,77 @@ class SetupWindow(QDialog):
 
     def build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 16, 18, 16)
-        root.setSpacing(10)
+        root.setContentsMargins(22, 20, 22, 18)
+        root.setSpacing(11)
 
         # Header
-        header = QVBoxLayout()
-        header.setSpacing(2)
+        header = QHBoxLayout()
+        header.setSpacing(12)
+
+        brand = QVBoxLayout()
+        brand.setSpacing(1)
+
+        eyebrow = QLabel("ANDROID DESKTOP CLIENT")
+        eyebrow.setObjectName("Eyebrow")
+        eyebrow.setWordWrap(True)
+        brand.addWidget(eyebrow)
 
         title = QLabel("PhoneView")
         title.setWordWrap(True)
-        title.setFont(QFont("DejaVu Sans", 24, QFont.Bold))
+        title.setFont(QFont("DejaVu Sans", 22, QFont.Bold))
+        brand.addWidget(title)
 
-        subtitle = QLabel("Automatic first-run setup")
+        subtitle = QLabel("Preparing your environment")
         subtitle.setObjectName("Subtitle")
         subtitle.setWordWrap(True)
-        subtitle.setFont(QFont("DejaVu Sans", 10))
+        brand.addWidget(subtitle)
 
-        header.addWidget(title)
-        header.addWidget(subtitle)
+        header.addLayout(brand, 1)
+
+        header_hint = QLabel("FIRST RUN")
+        header_hint.setObjectName("Muted")
+        header_hint.setWordWrap(True)
+        header_hint.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        header_hint.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
+        header.addWidget(header_hint)
+
         root.addLayout(header)
 
-        # Main status card
+        # Status card
         status_card = QFrame()
-        status_card.setObjectName("Card")
+        status_card.setObjectName("StatusCard")
         status_card.setSizePolicy(
             QSizePolicy.Expanding,
             QSizePolicy.Minimum,
         )
 
         status_layout = QVBoxLayout(status_card)
-        status_layout.setContentsMargins(14, 12, 14, 12)
-        status_layout.setSpacing(8)
+        status_layout.setContentsMargins(16, 15, 16, 15)
+        status_layout.setSpacing(9)
+
+        accent = QFrame()
+        accent.setObjectName("StatusAccent")
+        accent.setFixedHeight(5)
+        accent.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        status_layout.addWidget(accent)
 
         status_header = QHBoxLayout()
-        status_header.setSpacing(8)
+        status_header.setSpacing(10)
+
+        status_text = QVBoxLayout()
+        status_text.setSpacing(2)
 
         self.status = QLabel("Checking your system...")
+        self.status.setObjectName("StatusTitle")
         self.status.setWordWrap(True)
-        self.status.setFont(QFont("DejaVu Sans", 12, QFont.Bold))
         self.status.setSizePolicy(
             QSizePolicy.Expanding,
             QSizePolicy.Preferred,
         )
-
-        self.percent_label = QLabel("0%")
-        self.percent_label.setWordWrap(True)
-        self.percent_label.setAlignment(
-            Qt.AlignRight | Qt.AlignVCenter
-        )
-        self.percent_label.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
-        self.percent_label.setSizePolicy(
-            QSizePolicy.Minimum,
-            QSizePolicy.Preferred,
-        )
-
-        status_header.addWidget(self.status, 1)
-        status_header.addWidget(self.percent_label)
-        status_layout.addLayout(status_header)
+        status_text.addWidget(self.status)
 
         self.detail = QLabel(
-            "PhoneView is checking everything it needs before starting."
+            "Checking ADB, scrcpy and required system libraries."
         )
         self.detail.setObjectName("Muted")
         self.detail.setWordWrap(True)
@@ -242,7 +312,19 @@ class SetupWindow(QDialog):
             QSizePolicy.Expanding,
             QSizePolicy.Preferred,
         )
-        status_layout.addWidget(self.detail)
+        status_text.addWidget(self.detail)
+
+        status_header.addLayout(status_text, 1)
+
+        self.percent_label = QLabel("0%")
+        self.percent_label.setObjectName("Percent")
+        self.percent_label.setWordWrap(True)
+        self.percent_label.setAlignment(
+            Qt.AlignRight | Qt.AlignVCenter
+        )
+        status_header.addWidget(self.percent_label)
+
+        status_layout.addLayout(status_header)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
@@ -254,18 +336,14 @@ class SetupWindow(QDialog):
         )
         status_layout.addWidget(self.progress)
 
-        self.progress_text = QLabel("Starting...")
+        self.progress_text = QLabel("Initializing...")
         self.progress_text.setObjectName("Muted")
         self.progress_text.setWordWrap(True)
-        self.progress_text.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Preferred,
-        )
         status_layout.addWidget(self.progress_text)
 
         root.addWidget(status_card)
 
-        # Required components card
+        # Components
         dependencies = QFrame()
         dependencies.setObjectName("Card")
         dependencies.setSizePolicy(
@@ -274,13 +352,23 @@ class SetupWindow(QDialog):
         )
 
         dep_layout = QVBoxLayout(dependencies)
-        dep_layout.setContentsMargins(14, 10, 14, 10)
-        dep_layout.setSpacing(7)
+        dep_layout.setContentsMargins(14, 12, 14, 12)
+        dep_layout.setSpacing(8)
 
-        dep_title = QLabel("Required Components")
+        dep_header = QHBoxLayout()
+
+        dep_title = QLabel("Required components")
+        dep_title.setObjectName("SectionTitle")
         dep_title.setWordWrap(True)
-        dep_title.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
-        dep_layout.addWidget(dep_title)
+        dep_header.addWidget(dep_title)
+        dep_header.addStretch(1)
+
+        dep_hint = QLabel("3 checks")
+        dep_hint.setObjectName("Muted")
+        dep_hint.setWordWrap(True)
+        dep_header.addWidget(dep_hint)
+
+        dep_layout.addLayout(dep_header)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -303,7 +391,9 @@ class SetupWindow(QDialog):
         component_layout.setSpacing(6)
 
         for key in ("adb", "scrcpy", "xcb"):
-            component_layout.addWidget(self.create_dependency_row(key))
+            component_layout.addWidget(
+                self.create_dependency_row(key)
+            )
 
         component_layout.addItem(
             QSpacerItem(
@@ -319,32 +409,50 @@ class SetupWindow(QDialog):
 
         root.addWidget(dependencies)
 
-        # Live activity
-        activity_title = QLabel("Live Activity")
+        # Activity
+        activity_header = QHBoxLayout()
+
+        activity_title = QLabel("Live activity")
+        activity_title.setObjectName("SectionTitle")
         activity_title.setWordWrap(True)
-        activity_title.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
-        root.addWidget(activity_title)
+        activity_header.addWidget(activity_title)
+        activity_header.addStretch(1)
+
+        activity_hint = QLabel("SYSTEM OUTPUT")
+        activity_hint.setObjectName("Muted")
+        activity_hint.setWordWrap(True)
+        activity_hint.setFont(QFont("DejaVu Sans Mono", 8))
+        activity_header.addWidget(activity_hint)
+
+        root.addLayout(activity_header)
 
         self.log = QTextEdit()
         self.log.setObjectName("ActivityLog")
         self.log.setReadOnly(True)
         self.log.setAcceptRichText(False)
         self.log.setPlaceholderText(
-            "Activity and installation output will appear here..."
+            "Waiting for setup activity..."
         )
         self.log.setSizePolicy(
             QSizePolicy.Expanding,
             QSizePolicy.Expanding,
         )
-        self.log.setMinimumHeight(70)
+        self.log.setMinimumHeight(65)
         self.log.setFont(QFont("DejaVu Sans Mono", 9))
         root.addWidget(self.log, 1)
 
-        # Bottom buttons
-        buttons = QHBoxLayout()
-        buttons.setSpacing(8)
+        # Footer
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
 
-        buttons.addItem(
+        self.retry_button = QPushButton("Check again")
+        self.retry_button.setFont(
+            QFont("DejaVu Sans", 9, QFont.Bold)
+        )
+        self.retry_button.clicked.connect(self.run_check)
+
+        footer.addWidget(self.retry_button)
+        footer.addItem(
             QSpacerItem(
                 0,
                 0,
@@ -353,24 +461,24 @@ class SetupWindow(QDialog):
             )
         )
 
-        self.retry_button = QPushButton("Check again")
-        self.retry_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
-        self.retry_button.clicked.connect(self.run_check)
-
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
+        self.cancel_button.setFont(
+            QFont("DejaVu Sans", 9, QFont.Bold)
+        )
         self.cancel_button.clicked.connect(self.cancel_setup)
 
         self.continue_button = QPushButton("Start PhoneView")
         self.continue_button.setObjectName("Primary")
-        self.continue_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
+        self.continue_button.setFont(
+            QFont("DejaVu Sans", 9, QFont.Bold)
+        )
         self.continue_button.clicked.connect(self.accept)
         self.continue_button.setEnabled(False)
 
-        buttons.addWidget(self.retry_button)
-        buttons.addWidget(self.cancel_button)
-        buttons.addWidget(self.continue_button)
-        root.addLayout(buttons)
+        footer.addWidget(self.cancel_button)
+        footer.addWidget(self.continue_button)
+
+        root.addLayout(footer)
 
     def create_dependency_row(self, key):
         row = QFrame()
@@ -381,37 +489,39 @@ class SetupWindow(QDialog):
         )
 
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(8)
+        layout.setContentsMargins(10, 7, 10, 7)
+        layout.setSpacing(9)
 
         icon = QLabel("○")
+        icon.setObjectName("StatusIcon")
         icon.setWordWrap(True)
         icon.setAlignment(Qt.AlignCenter)
-        icon.setFont(QFont("DejaVu Sans", 13, QFont.Bold))
-        icon.setFixedWidth(22)
+        icon.setFixedWidth(24)
 
         name = QLabel({
             "adb": "Android Debug Bridge (ADB)",
             "scrcpy": "scrcpy",
             "xcb": "Qt XCB cursor support",
         }[key])
+        name.setObjectName("DependencyName")
         name.setWordWrap(True)
-        name.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
         name.setSizePolicy(
             QSizePolicy.Expanding,
             QSizePolicy.Preferred,
         )
 
         state = QLabel("Waiting")
+        state.setObjectName("DependencyState")
         state.setWordWrap(True)
-        state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        state.setAlignment(
+            Qt.AlignRight | Qt.AlignVCenter
+        )
         state.setSizePolicy(
             QSizePolicy.Preferred,
             QSizePolicy.Preferred,
         )
-        state.setMinimumWidth(72)
-        state.setMaximumWidth(125)
-        state.setStyleSheet("color: #9E9E9E;")
+        state.setMinimumWidth(78)
+        state.setMaximumWidth(130)
 
         layout.addWidget(icon)
         layout.addWidget(name, 1)
@@ -430,9 +540,13 @@ class SetupWindow(QDialog):
             return
 
         item["icon"].setText(icon)
-        item["icon"].setStyleSheet(f"color: {color};")
+        item["icon"].setStyleSheet(
+            f"color: {color};"
+        )
         item["state"].setText(state)
-        item["state"].setStyleSheet(f"color: {color};")
+        item["state"].setStyleSheet(
+            f"color: {color};"
+        )
 
     def write_log(self, text):
         if not text:
@@ -471,12 +585,11 @@ class SetupWindow(QDialog):
         for item in items:
             if item["ok"]:
                 self.set_row(
-                    item["id"],
-                    "Ready",
-                    "✓",
-                    "#4CAF50",
+                    item["id"], "Ready", "✓", "#4CAF50"
                 )
-                self.write_log(f"✓ {item['name']} is ready.")
+                self.write_log(
+                    f"✓ {item['name']} is ready."
+                )
             else:
                 self.set_row(
                     item["id"],
@@ -484,7 +597,9 @@ class SetupWindow(QDialog):
                     "↓",
                     "#FFB300",
                 )
-                self.write_log(f"↓ {item['name']} is missing.")
+                self.write_log(
+                    f"↓ {item['name']} is missing."
+                )
 
         if not missing:
             self.finish_success()
@@ -507,9 +622,16 @@ class SetupWindow(QDialog):
             QTimer.singleShot(500, self.start_install)
             return
 
-        self.status.setText("Automatic installation is unavailable")
-        self.detail.setText(self.manual_install_message())
-        self.set_progress(15, "Waiting for manual setup.")
+        self.status.setText(
+            "Automatic installation is unavailable"
+        )
+        self.detail.setText(
+            self.manual_install_message()
+        )
+        self.set_progress(
+            15,
+            "Waiting for manual setup."
+        )
         self.cancel_button.setEnabled(True)
 
     def start_install(self):
@@ -536,10 +658,7 @@ class SetupWindow(QDialog):
             key = self.package_to_key(package)
             if key:
                 self.set_row(
-                    key,
-                    "Queued",
-                    "↓",
-                    "#2979FF",
+                    key, "Queued", "↓", "#2979FF"
                 )
 
         self.status.setText("Preparing downloads...")
@@ -547,14 +666,20 @@ class SetupWindow(QDialog):
             "Requesting administrator permission and updating "
             "package information."
         )
-        self.set_progress(20, "Updating package lists...")
-        self.write_log("Automatic setup started.")
+        self.set_progress(
+            20, "Updating package lists..."
+        )
+        self.write_log(
+            "Automatic setup started."
+        )
         self.write_log(
             "A system permission dialog may appear now."
         )
 
         self.process = QProcess(self)
-        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.setProcessChannelMode(
+            QProcess.MergedChannels
+        )
         self.process.readyReadStandardOutput.connect(
             self.read_output
         )
@@ -586,7 +711,9 @@ class SetupWindow(QDialog):
         if not data:
             return
 
-        for raw_line in data.replace("\r", "\n").splitlines():
+        for raw_line in data.replace(
+            "\r", "\n"
+        ).splitlines():
             line = raw_line.strip()
 
             if not line:
@@ -603,38 +730,38 @@ class SetupWindow(QDialog):
             if "reading package lists" in lower:
                 self.set_progress(
                     max(self.progress.value(), 42),
-                    "Reading package lists...",
+                    "Reading package lists..."
                 )
             elif "building dependency tree" in lower:
                 self.set_progress(
                     max(self.progress.value(), 48),
-                    "Building dependency tree...",
+                    "Building dependency tree..."
                 )
             elif "building state information" in lower:
                 self.set_progress(
                     max(self.progress.value(), 52),
-                    "Building package state...",
+                    "Building package state..."
                 )
             elif "download complete" in lower:
                 self.set_progress(
                     max(self.progress.value(), 65),
-                    "Downloads complete. Installing...",
+                    "Downloads complete. Installing..."
                 )
             elif "unpacking" in lower:
                 self.set_progress(
                     max(self.progress.value(), 72),
-                    "Unpacking packages...",
+                    "Unpacking packages..."
                 )
             elif "setting up" in lower:
                 self.set_progress(
                     max(self.progress.value(), 84),
-                    "Configuring packages...",
+                    "Configuring packages..."
                 )
 
     def parse_download_status(self, line):
         match = re.search(
             r"percent:(\d+(?:\.\d+)?)",
-            line,
+            line
         )
 
         if not match:
@@ -645,7 +772,7 @@ class SetupWindow(QDialog):
 
         self.set_progress(
             max(self.progress.value(), int(overall)),
-            f"Downloading packages... {percent:.0f}%",
+            f"Downloading packages... {percent:.0f}%"
         )
 
     def install_finished(self, exit_code, exit_status):
@@ -681,7 +808,7 @@ class SetupWindow(QDialog):
         )
         self.set_progress(
             58,
-            "Downloading required packages...",
+            "Downloading required packages..."
         )
         self.write_log(
             "Installing: " + ", ".join(packages)
@@ -712,7 +839,7 @@ class SetupWindow(QDialog):
     def package_install_finished(
         self,
         exit_code,
-        exit_status,
+        exit_status
     ):
         self.read_output()
 
@@ -731,21 +858,23 @@ class SetupWindow(QDialog):
 
         self.set_progress(
             95,
-            "Installation finished. Verifying...",
+            "Installation finished. Verifying..."
         )
         self.status.setText(
             "Verifying installation"
         )
         self.detail.setText(
-            "Checking every component again before "
-            "PhoneView starts."
+            "Checking every component again before PhoneView starts."
         )
         self.write_log(
             "✓ Installation completed. "
             "Running final verification..."
         )
 
-        QTimer.singleShot(800, self.run_check)
+        QTimer.singleShot(
+            800,
+            self.run_check
+        )
 
     def finish_success(self):
         self.process = None
@@ -758,7 +887,7 @@ class SetupWindow(QDialog):
         )
         self.set_progress(
             100,
-            "Setup completed successfully.",
+            "Setup completed successfully."
         )
 
         self.write_log(
@@ -778,14 +907,14 @@ class SetupWindow(QDialog):
                     item["id"],
                     "Ready",
                     "✓",
-                    "#4CAF50",
+                    "#4CAF50"
                 )
 
     def fail_setup(
         self,
         title,
         detail,
-        exit_code,
+        exit_code
     ):
         self.process = None
         self.installing = False
@@ -794,7 +923,7 @@ class SetupWindow(QDialog):
         self.detail.setText(detail)
         self.set_progress(
             max(15, self.progress.value()),
-            f"Operation failed (exit code {exit_code}).",
+            f"Operation failed (exit code {exit_code})."
         )
 
         self.write_log(
@@ -813,7 +942,7 @@ class SetupWindow(QDialog):
                     key,
                     "Failed",
                     "!",
-                    "#F44336",
+                    "#F44336"
                 )
 
     def process_error(self, error):
@@ -824,8 +953,7 @@ class SetupWindow(QDialog):
             "Installer could not start"
         )
         self.detail.setText(
-            "PhoneView could not start the system "
-            "package installer."
+            "PhoneView could not start the system package installer."
         )
 
         self.process = None
@@ -845,21 +973,18 @@ class SetupWindow(QDialog):
             return (
                 "Automatic installation requires the system "
                 "authorization service (pkexec). Install the "
-                "missing components manually, then click "
-                "Check again."
+                "missing components manually, then click Check again."
             )
 
         if sys.platform == "darwin":
             return (
-                "Automatic macOS installation will be added "
-                "later. Install ADB and scrcpy, then click "
-                "Check again."
+                "Automatic macOS installation will be added later. "
+                "Install ADB and scrcpy, then click Check again."
             )
 
         return (
-            "Automatic Windows installation will be added "
-            "later. Install ADB and scrcpy, then click "
-            "Check again."
+            "Automatic Windows installation will be added later. "
+            "Install ADB and scrcpy, then click Check again."
         )
 
     def cancel_setup(self):
