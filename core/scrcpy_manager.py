@@ -51,23 +51,24 @@ class ScrcpyManager:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
+    def _build_command(self, serial):
+        # Keep the launch command compatible with scrcpy 1.25.
+        # Avoid newer options such as --no-audio, --video-bit-rate,
+        # and --max-size because option names/support vary by scrcpy release.
+        return [
+            self.scrcpy,
+            "--serial", serial,
+            "--window-title", "PhoneView - Android",
+            "--stay-awake",
+        ]
+
     def start(self, serial):
         self.stop()
 
         if not self.scrcpy:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
-        # scrcpy 1.x (including Ubuntu 22.04's 1.25) does not support
-        # --no-audio. Audio forwarding was added in later scrcpy releases,
-        # so simply omit the audio option for compatibility.
-        cmd = [
-            self.scrcpy,
-            "--serial", serial,
-            "--window-title", "PhoneView - Android",
-            "--stay-awake",
-            "--max-size", "1280",
-            "--video-bit-rate", "8M",
-        ]
+        cmd = self._build_command(serial)
 
         try:
             self.process = subprocess.Popen(
@@ -82,7 +83,7 @@ class ScrcpyManager:
             raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
 
         try:
-            self.process.wait(timeout=0.45)
+            self.process.wait(timeout=0.6)
         except subprocess.TimeoutExpired:
             return
 
@@ -94,7 +95,7 @@ class ScrcpyManager:
 
         code = self.process.returncode
         self.process = None
-        detail = output[-1600:] if output else f"scrcpy exited with code {code}."
+        detail = output[-2000:] if output else f"scrcpy exited with code {code}."
         raise RuntimeError(detail)
 
     def read_output(self):
