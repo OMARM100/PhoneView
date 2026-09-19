@@ -728,21 +728,22 @@ class MainWindow(QMainWindow):
 
             self.connected_serial = serial
             self.progress.setVisible(False)
-            self.stream_state.setText("●  SCREEN STREAMING")
+            self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
-            self.mirror_placeholder.setText("▯\n\nFINDING MIRROR WINDOW…")
-            self.control_state.setText("Waiting for\nscrcpy window")
-            self.embed_attempts = 0
-            self.embed_timer.start(100)
+            self.mirror_placeholder.hide()
+            self.mapping_editor.set_mappings(self.custom_controls)
+            self.mapping_editor.show()
+            self.control_state.setText("Editor ready\nScrcpy is separate")
             self.header_state.setText("●  CONNECTED")
-            self.write_log("✓ Android screen connected.")
+            self.write_log("✓ Android screen connected in a separate scrcpy window.")
+            self.write_log("✓ PhoneView mapping editor is ready.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
         except Exception as exc:
             self.connected_serial = None
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN UNAVAILABLE")
             self.stream_state.setObjectName("StatusBad")
-            self.mirror_placeholder.setText("▯\n\nMIRROR FAILED\n\nSee Live activity.")
+            self.mirror_placeholder.setText("MAPPING EDITOR\n\nMIRROR FAILED\n\nSee Live activity.")
             self.header_state.setText("●  CONNECTION ERROR")
             self.write_log(f"✗ Connection failed: {exc}")
             QMessageBox.critical(self, "PhoneView", f"scrcpy could not start:\n\n{exc}")
