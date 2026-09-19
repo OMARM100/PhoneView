@@ -340,7 +340,7 @@ class MainWindow(QMainWindow):
         workspace_l.addWidget(workspace_title)
         self.mapping_status = QLabel(
             "The mapping editor appears directly over the external Android window.\n\n"
-            "Use the Edit button in PhoneView to open it."
+            "When scrcpy opens, use the ✎ Edit button shown inside the phone window."
         )
         self.mapping_status.setObjectName("StageHint")
         self.mapping_status.setAlignment(Qt.AlignCenter)
