@@ -27,9 +27,9 @@ class ScrcpyManager:
         candidates = []
         if os.name == "nt":
             candidates = [
-                os.path.expandvars(r"%ProgramFiles%\\scrcpy\\scrcpy.exe"),
-                os.path.expandvars(r"%ProgramFiles(x86)%\\scrcpy\\scrcpy.exe"),
-                os.path.expandvars(r"%USERPROFILE%\\scoop\\apps\\scrcpy\\current\\scrcpy.exe"),
+                os.path.expandvars(r"%ProgramFiles%\scrcpy\scrcpy.exe"),
+                os.path.expandvars(r"%ProgramFiles(x86)%\scrcpy\scrcpy.exe"),
+                os.path.expandvars(r"%USERPROFILE%\scoop\apps\scrcpy\current\scrcpy.exe"),
             ]
         else:
             candidates = [
@@ -63,7 +63,8 @@ class ScrcpyManager:
             return ""
 
     def version_number(self):
-        match = re.search(r"scrcpy\\s+(\\d+)\\.(\\d+)", self.version(), re.IGNORECASE)
+        # scrcpy 1.25 -> (1, 25)
+        match = re.search(r"scrcpys+(d+).(d+)", self.version(), re.IGNORECASE)
         if not match:
             return None
         return int(match.group(1)), int(match.group(2))
@@ -93,7 +94,8 @@ class ScrcpyManager:
                 text=True,
                 timeout=3,
             )
-            self._help_text = (result.stdout or "") + "\\n" + (result.stderr or "")
+            self._help_text = (result.stdout or "") + "
+" + (result.stderr or "")
         except Exception:
             self._help_text = ""
         return self._help_text
@@ -110,10 +112,7 @@ class ScrcpyManager:
             "PhoneView - Android",
         ]
 
-        for option, value in (
-            ("--stay-awake", None),
-            ("--always-on-top", None),
-        ):
+        for option in ("--stay-awake", "--always-on-top"):
             if self._supports(option):
                 cmd.append(option)
 
