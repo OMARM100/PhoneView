@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QLineEdit,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -219,9 +220,12 @@ class MainWindow(QMainWindow):
         self.header_state.setObjectName("StatusWarn")
         hl.addWidget(self.header_state)
 
-        self.project_label = QLabel("PROJECT  •  Android Project")
-        self.project_label.setObjectName("Muted")
-        hl.addWidget(self.project_label)
+        self.project_input = QLineEdit("Android Project")
+        self.project_input.setPlaceholderText("Project name")
+        self.project_input.setToolTip("This name becomes the title of the Android mirror window.")
+        self.project_input.setMaximumWidth(190)
+        self.project_input.textChanged.connect(self.set_project_name)
+        hl.addWidget(self.project_input)
 
         self.refresh_button = QPushButton("↻  Refresh")
         self.refresh_button.clicked.connect(self.refresh_devices)
@@ -393,6 +397,10 @@ class MainWindow(QMainWindow):
             self.write_log("! Update scrcpy before starting screen mirroring.")
         self.engine_text.setText(self.scrcpy.version() or "scrcpy not detected")
         self.update_buttons()
+
+    def set_project_name(self, name):
+        clean = " ".join(name.split()).strip()
+        self.project_name = clean[:80] or "Android Project"
 
     def open_button_manager(self):
         if self.button_manager is None:
