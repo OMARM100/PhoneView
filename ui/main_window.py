@@ -620,8 +620,7 @@ class MainWindow(QMainWindow):
         serial = device.serial
         self.connect_button.setEnabled(False)
         self.progress.setVisible(True)
-        self.stage_state.setText("STARTING SCREEN...")
-        self.stage_hint.setText("Launching scrcpy and waiting for the mirror window.")
+        self.mirror_placeholder.setText("▯\n\nSTARTING SCREEN...\n\nLaunching scrcpy…")
         self.stream_state.setText("●  CONNECTING")
         self.stream_state.setObjectName("StatusWarn")
         self.header_state.setText("●  CONNECTING")
