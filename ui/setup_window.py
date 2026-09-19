@@ -338,12 +338,14 @@ class SetupWindow(QDialog):
             self.finish_success()
             return
 
-        if sys.platform.startswith("linux") and self.pkexec_path():
-            self.status.setText("Missing components found")
+        if sys.platform.startswith("linux") and (
+            any(item["id"] == "scrcpy" for item in missing) or self.pkexec_path()
+        ):
+            self.status.setText("Preparing automatic installation")
             self.detail.setText(
-                "PhoneView will ask the operating system for administrator permission. "
-                "Your password is entered only in the system authentication dialog and "
-                "is never received or stored by PhoneView."
+                "PhoneView will install the official stable scrcpy release directly "
+                "from the official project when scrcpy is missing or obsolete. "
+                "System packages, when needed, use the normal operating-system authorization dialog."
             )
             self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
             self.install_timer = QTimer(self)
@@ -365,6 +367,38 @@ class SetupWindow(QDialog):
         packages = self.checker.missing_linux_packages()
         if not packages:
             self.run_check()
+            return
+
+        # scrcpy is deliberately installed outside apt. Ubuntu/Debian repositories
+        # may ship an obsolete release, so PhoneView uses the official stable archive.
+        if "scrcpy" in packages:
+            self.installing = True
+            self.cancelling = False
+            self.current_packages = packages
+            self.package_progress = {package: 0 for package in packages}
+            self.retry_button.setEnabled(False)
+            self.cancel_button.setEnabled(True)
+            self.continue_button.setEnabled(False)
+
+            self.set_row("scrcpy", "Downloading official release", "↓", "#2979FF")
+            self.status.setText("Updating scrcpy")
+            self.detail.setText(
+                "Downloading the latest stable Linux x86_64 release from the official scrcpy repository."
+            )
+            self.set_progress(18, "Checking the latest stable scrcpy release...")
+            self.write_log("Automatic scrcpy update started.")
+            self.write_log("Source: official Genymobile/scrcpy GitHub release.")
+            self.write_log("APT will not be used for scrcpy because Ubuntu/Debian may provide an obsolete version.")
+
+            self.process = QProcess(self)
+            self.process.setProcessChannelMode(QProcess.MergedChannels)
+            self.process.readyReadStandardOutput.connect(self.read_scrcpy_output)
+            self.process.finished.connect(self.scrcpy_update_finished)
+            self.process.errorOccurred.connect(self.process_error)
+            self.process.start(
+                sys.executable,
+                ["-m", "core.scrcpy_installer"],
+            )
             return
 
         self.installing = True
@@ -396,6 +430,84 @@ class SetupWindow(QDialog):
         self.install_timer.setSingleShot(True)
         self.install_timer.timeout.connect(self.start_authorized_update)
         self.install_timer.start(700)
+
+    def read_scrcpy_output(self):
+        if not self.process:
+            return
+
+        data = bytes(self.process.readAllStandardOutput()).decode(errors="replace")
+        if not data:
+            return
+
+        for raw_line in data.replace("\r", "\n").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            if line.startswith("PROGRESS:"):
+                try:
+                    percent = int(float(line.split(":", 1)[1]))
+                    self.set_progress(max(18, min(96, percent)), f"Updating scrcpy... {percent}%")
+                except ValueError:
+                    pass
+                continue
+
+            if line.startswith("ERROR:"):
+                self.write_log("✗ " + line[6:])
+                continue
+
+            self.write_log(line)
+
+    def scrcpy_update_finished(self, exit_code, exit_status):
+        self.read_scrcpy_output()
+        if self.cancelling:
+            return
+
+        self.cleanup_process()
+
+        if exit_code != 0:
+            self.fail_setup(
+                "scrcpy update failed",
+                "PhoneView could not install the official stable scrcpy release. "
+                "Check the Activity log for the exact error.",
+                exit_code,
+            )
+            return
+
+        items = self.checker.check()
+        scrcpy_item = next(item for item in items if item["id"] == "scrcpy")
+        if not scrcpy_item["ok"]:
+            self.fail_setup(
+                "scrcpy verification failed",
+                "The official installer finished, but PhoneView could not verify a usable scrcpy release.",
+                1,
+            )
+            return
+
+        self.write_log("✓ Official stable scrcpy passed final verification.")
+        self.set_row("scrcpy", "Ready", "✓", "#4CAF50")
+        self.set_progress(92, "scrcpy is ready. Checking remaining system components...")
+
+        remaining = [
+            item for item in items
+            if not item["ok"] and item["id"] != "scrcpy"
+        ]
+
+        if not remaining:
+            self.finish_success()
+            return
+
+        if not self.pkexec_path():
+            self.fail_setup(
+                "System components still need authorization",
+                "scrcpy is updated successfully, but the remaining system packages require pkexec.",
+                1,
+            )
+            return
+
+        # Re-enter the existing system-package installer for ADB/XCB.
+        self.current_packages = [item["package"] for item in remaining if item.get("package")]
+        self.start_install()
 
     def start_authorized_update(self):
         self.install_timer = None

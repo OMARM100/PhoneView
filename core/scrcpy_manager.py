@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import tempfile
 
+from core.scrcpy_installer import ScrcpyInstaller
+
 
 class ScrcpyManager:
     """Launch and monitor scrcpy, including compatibility diagnostics."""
@@ -20,6 +22,10 @@ class ScrcpyManager:
 
     @staticmethod
     def _find_scrcpy():
+        managed = ScrcpyInstaller.local_binary()
+        if managed:
+            return managed
+
         exe = shutil.which("scrcpy")
         if exe:
             return exe
