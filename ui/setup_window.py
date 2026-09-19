@@ -187,7 +187,7 @@ class SetupWindow(QDialog):
         dep_title.setObjectName("SectionTitle")
         dep_header.addWidget(dep_title)
         dep_header.addStretch(1)
-        dep_hint = QLabel("3 COMPONENTS")
+        dep_hint = QLabel("5 COMPONENTS")
         dep_hint.setObjectName("SectionMeta")
         dep_header.addWidget(dep_hint)
         dep_layout.addLayout(dep_header)
@@ -197,7 +197,7 @@ class SetupWindow(QDialog):
         component_layout = QVBoxLayout(content)
         component_layout.setContentsMargins(0, 0, 0, 0)
         component_layout.setSpacing(6)
-        for key in ("adb", "scrcpy", "xcb"):
+        for key in ("adb", "scrcpy", "xcb", "wmctrl", "xdotool"):
             component_layout.addWidget(self.create_dependency_row(key))
         component_layout.addItem(QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
@@ -267,6 +267,8 @@ class SetupWindow(QDialog):
             "adb": "Android Debug Bridge (ADB)",
             "scrcpy": "scrcpy",
             "xcb": "Qt XCB cursor support",
+            "wmctrl": "X11 window control (wmctrl)",
+            "xdotool": "X11 input/window helper (xdotool)",
         }[key])
         name.setObjectName("DependencyName")
         name.setWordWrap(True)
@@ -777,6 +779,8 @@ class SetupWindow(QDialog):
             "adb": "adb",
             "scrcpy": "scrcpy",
             "libxcb-cursor0": "xcb",
+            "wmctrl": "wmctrl",
+            "xdotool": "xdotool",
         }.get(package)
 
     def pkexec_path(self):
