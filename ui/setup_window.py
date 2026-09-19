@@ -1,5 +1,7 @@
 import os
 import re
+import shutil
+import subprocess
 import sys
 
 from PySide6.QtCore import QProcess, QTimer, Qt
@@ -76,6 +78,8 @@ class SetupWindow(QDialog):
 
         self.checker = DependencyChecker()
         self.process = None
+        self.auth_agent_process = None
+        self.auth_agent_started_by_us = False
         self.installing = False
         self.cancelling = False
         self.current_packages = []
@@ -384,6 +388,38 @@ class SetupWindow(QDialog):
         self.write_log("Password security: authentication is handled by the operating system.")
         self.write_log("Requesting graphical system authorization (no Terminal window).")
 
+        if sys.platform.startswith("linux"):
+            if not self.ensure_graphical_auth_agent():
+                self.installing = False
+                self.retry_button.setEnabled(True)
+                self.cancel_button.setEnabled(True)
+                self.continue_button.setEnabled(False)
+                return
+
+        QTimer.singleShot(500, self.start_authorized_update)
+
+    def start_authorized_update(self):
+        if self.cancelling or not self.installing or self.process is not None:
+            return
+
+        pkexec = self.pkexec_path()
+        if not pkexec:
+            self.fail_setup(
+                "Administrator authorization is unavailable.",
+                "pkexec is no longer available on this system.",
+                1,
+            )
+            return
+
+        self.status.setText("Administrator permission required")
+        self.detail.setText(
+            "The system authentication dialog should appear now. "
+            "Enter your password only in that system dialog."
+        )
+        self.set_progress(20, "Waiting for the system authorization dialog...")
+        self.write_log("✓ Graphical authentication agent is ready.")
+        self.write_log("Starting privileged package manager without a Terminal password prompt.")
+
         self.process = QProcess(self)
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.read_output)
@@ -401,6 +437,95 @@ class SetupWindow(QDialog):
                 "update",
             ],
         )
+
+    def find_graphical_auth_agent(self):
+        candidates = [
+            "polkit-gnome-authentication-agent-1",
+            "polkit-mate-authentication-agent-1",
+            "mate-polkit",
+            "lxpolkit",
+            "polkit-kde-authentication-agent-1",
+        ]
+
+        for name in candidates:
+            path = shutil.which(name)
+            if path:
+                return path
+
+        paths = [
+            "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
+            "/usr/lib/polkit-1-gnome/polkit-gnome-authentication-agent-1",
+            "/usr/libexec/polkit-gnome-authentication-agent-1",
+            "/usr/libexec/polkit-mate-authentication-agent-1",
+            "/usr/lib/x86_64-linux-gnu/polkit-gnome/polkit-gnome-authentication-agent-1",
+        ]
+
+        for path in paths:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+
+        return None
+
+    def graphical_auth_agent_running(self):
+        try:
+            result = subprocess.run(
+                [
+                    "pgrep", "-af",
+                    "polkit-(gnome|mate)-authentication-agent-1|mate-polkit|lxpolkit|polkit-kde-authentication-agent-1",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def ensure_graphical_auth_agent(self):
+        if not sys.platform.startswith("linux"):
+            return True
+
+        if self.graphical_auth_agent_running():
+            self.write_log("✓ A graphical system authentication agent is already running.")
+            return True
+
+        agent = self.find_graphical_auth_agent()
+        if not agent:
+            self.status.setText("Graphical authentication is unavailable")
+            self.detail.setText(
+                "No graphical Polkit authentication agent was found. "
+                "PhoneView will not request or collect your password itself."
+            )
+            self.set_progress(
+                15,
+                "Install or enable a system Polkit authentication agent, then click Check again.",
+            )
+            self.write_log("✗ No graphical Polkit authentication agent was found.")
+            self.write_log(
+                "PhoneView will never fall back to collecting the user's password."
+            )
+            return False
+
+        self.write_log(f"Starting graphical authentication agent: {agent}")
+        agent_process = QProcess(self)
+        agent_process.setProcessChannelMode(QProcess.MergedChannels)
+        agent_process.start(agent, [])
+
+        if not agent_process.waitForStarted(1500):
+            self.write_log("✗ The graphical authentication agent could not be started.")
+            agent_process.deleteLater()
+            self.status.setText("Authentication agent could not start")
+            self.detail.setText(
+                "The system has a graphical Polkit agent, but it could not be started. "
+                "PhoneView will not fall back to collecting your password."
+            )
+            self.set_progress(15, "Authentication agent startup failed.")
+            return False
+
+        self.auth_agent_process = agent_process
+        self.auth_agent_started_by_us = True
+        self.write_log("✓ Graphical authentication agent started.")
+        return True
 
     def read_output(self):
         if not self.process:
@@ -628,6 +753,26 @@ class SetupWindow(QDialog):
             "Install ADB and scrcpy, then click Check again."
         )
 
+    def stop_auth_agent(self):
+        process = self.auth_agent_process
+        self.auth_agent_process = None
+
+        if process is None:
+            return
+
+        if self.auth_agent_started_by_us:
+            try:
+                if process.state() != QProcess.NotRunning:
+                    process.terminate()
+                    if not process.waitForFinished(1500):
+                        process.kill()
+                        process.waitForFinished(500)
+            except RuntimeError:
+                pass
+            process.deleteLater()
+
+        self.auth_agent_started_by_us = False
+
     def cancel_setup(self):
         if self.process is not None:
             self.cancelling = True
@@ -647,6 +792,7 @@ class SetupWindow(QDialog):
             process.deleteLater()
 
         self.installing = False
+        self.stop_auth_agent()
         self.reject()
 
     def closeEvent(self, event):
@@ -656,4 +802,5 @@ class SetupWindow(QDialog):
             return
 
         self.cleanup_process()
+        self.stop_auth_agent()
         event.accept()
