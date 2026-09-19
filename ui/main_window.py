@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from core.adb_manager import ADBManager
 from core.scrcpy_manager import ScrcpyManager
+from ui.scrcpy_mapping_overlay import ScrcpyMappingOverlay
 
 
 QSS = """
@@ -210,6 +211,7 @@ class MainWindow(QMainWindow):
         self.project_name = "Android Project"
         self.controls_edit_mode = False
         self.custom_controls = self.load_custom_controls()
+        self.mapping_overlay = None
 
         self.build_ui()
 
@@ -328,50 +330,19 @@ class MainWindow(QMainWindow):
         stage_l.setContentsMargins(10, 10, 10, 10)
         stage_l.setSpacing(8)
 
-        # GameLoop-style editor toolbar. The real scrcpy mirror is never
-        # inserted into this widget; it remains a separate native window.
-        editor_bar = QFrame()
-        editor_bar.setObjectName("ControlPanel")
-        bar_l = QHBoxLayout(editor_bar)
-        bar_l.setContentsMargins(8, 7, 8, 7)
-        bar_l.setSpacing(7)
-
-        editor_title = QLabel("KEY MAPPING")
-        editor_title.setObjectName("Eyebrow")
-        bar_l.addWidget(editor_title)
-
-        self.editor_state = QLabel("VIEW MODE")
-        self.editor_state.setObjectName("Muted")
-        bar_l.addWidget(self.editor_state)
-        bar_l.addStretch()
-
-        self.edit_controls_button = QPushButton("✎  Edit")
-        self.edit_controls_button.setObjectName("ControlAccent")
-        self.edit_controls_button.clicked.connect(self.toggle_controls_edit)
-        bar_l.addWidget(self.edit_controls_button)
-
-        self.add_mapping_button = QPushButton("＋  Add Button")
-        self.add_mapping_button.setObjectName("Control")
-        self.add_mapping_button.clicked.connect(self.add_custom_control)
-        self.add_mapping_button.setVisible(False)
-        bar_l.addWidget(self.add_mapping_button)
-
-        self.focus_button = QPushButton("Open Android Screen")
-        self.focus_button.setObjectName("Control")
-        self.focus_button.clicked.connect(self.focus_scrcpy)
-        bar_l.addWidget(self.focus_button)
-
-        stage_l.addWidget(editor_bar)
-
+        # Mapping controls live directly over the external scrcpy window.
         self.mapping_workspace = QFrame()
         self.mapping_workspace.setObjectName("MirrorHost")
         workspace_l = QVBoxLayout(self.mapping_workspace)
         workspace_l.setContentsMargins(28, 28, 28, 28)
         workspace_l.setSpacing(12)
-        workspace_title = QLabel("KEY MAPPING WORKSPACE")
+        workspace_title = QLabel("SCRCPY MAPPING EDITOR")
         workspace_title.setObjectName("Eyebrow")
         workspace_l.addWidget(workspace_title)
-        self.mapping_status = QLabel("No Android screen is rendered inside PhoneView.\n\nThe Android display is handled exclusively by the separate scrcpy window.\nPhoneView is only the mapping and configuration layer.")
+        self.mapping_status = QLabel(
+            "The mapping editor appears directly over the external Android window.\n\n"
+            "Use the Edit button in PhoneView to open it."
+        )
         self.mapping_status.setObjectName("StageHint")
         self.mapping_status.setAlignment(Qt.AlignCenter)
         self.mapping_status.setWordWrap(True)
@@ -579,9 +550,6 @@ class MainWindow(QMainWindow):
         legacy = self.scrcpy.is_legacy()
         self.connect_button.setEnabled(ready and self.scrcpy.available() and not legacy and not self.scrcpy.running())
         self.disconnect_button.setEnabled(self.scrcpy.running())
-        for button in self.findChildren(QPushButton):
-            if button.objectName() in ("Control", "ControlAccent"):
-                button.setEnabled(ready and self.scrcpy.running())
 
     def connect_selected(self):
         device = self.current_device()
@@ -639,11 +607,11 @@ class MainWindow(QMainWindow):
                 raise RuntimeError("scrcpy exited before the mirror window was created.")
 
             self.connected_serial = serial
+            self.ensure_mapping_overlay()
+            self.mapping_overlay.hide()
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
-            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
-            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
             self.write_log("✓ PhoneView mapping editor is ready.")
@@ -676,93 +644,65 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             self.write_log(f"! Could not save custom buttons: {exc}")
 
-    def _clear_layout(self, layout):
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            child = item.layout()
-            if widget:
-                widget.deleteLater()
-            elif child:
-                self._clear_layout(child)
-
     def add_custom_control(self):
-        if not self.controls_edit_mode:
-            self.toggle_controls_edit()
-        label, ok = QInputDialog.getText(self, "Add Button", "Button name:", text="Button")
-        if not ok or not label.strip():
+        if not self.scrcpy.running():
+            self.write_log("! Start the Android screen before editing mappings.")
             return
-        key, ok = QInputDialog.getText(self, "Bind Keyboard", "Press/type the key to bind:", text="W")
-        if not ok or not key.strip():
-            return
-        key = key.strip().upper()
-        self.custom_controls.append({"label": label.strip()[:18], "key": key, "type": "keyboard", "keycode": self.qt_key_to_adb_keycode(key)})
+        self.ensure_mapping_overlay()
+        self.mapping_overlay.show_editor()
+        self.mapping_overlay.begin_capture()
+
+    def ensure_mapping_overlay(self):
+        if self.mapping_overlay is None:
+            self.mapping_overlay = ScrcpyMappingOverlay(
+                self.project_name,
+                self.custom_controls,
+                self,
+            )
+            self.mapping_overlay.changed.connect(self.save_custom_controls)
+            self.mapping_overlay.capture_finished.connect(self._mapping_captured)
+
+    def _mapping_captured(self, item):
         self.save_custom_controls()
-        self.refresh_mapping_workspace()
-        self.write_log(f"✓ Button created: {label.strip()} → {key}")
+        self.write_log(
+            f"✓ Mapping captured: {item.get('label', 'Button')} "
+            f"({item.get('type', 'input')})"
+        )
 
-    def qt_key_to_adb_keycode(self, key):
-        return {"SPACE":62,"ENTER":66,"RETURN":66,"TAB":61,"BACKSPACE":67,"ESC":111,"LEFT":21,"RIGHT":22,"UP":19,"DOWN":20}.get(key)
-
-    def refresh_mapping_workspace(self):
-        layout = self.mapping_workspace.layout()
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
-        title = QLabel("KEY MAPPING")
-        title.setObjectName("Eyebrow")
-        layout.addWidget(title)
-        if not self.custom_controls:
-            empty = QLabel("No buttons yet.\nClick Edit → Add Button to create your first mapping.")
-            empty.setObjectName("StageHint")
-            empty.setAlignment(Qt.AlignCenter)
-            layout.addStretch(1); layout.addWidget(empty); layout.addStretch(1)
+    def toggle_controls_edit(self):
+        if not self.scrcpy.running():
+            self.write_log("! Start the Android screen before opening the mapping editor.")
             return
-        for index, item in enumerate(self.custom_controls):
-            row = QFrame(); row.setObjectName("ControlPanel")
-            row_l = QHBoxLayout(row); row_l.setContentsMargins(12,8,12,8)
-            label = QLabel(str(item.get("label","Button"))); label.setObjectName("DeviceTitle"); label.setStyleSheet("font-size:11px;")
-            key = QLabel(str(item.get("key", item.get("keycode", "UNBOUND")))); key.setObjectName("Muted")
-            row_l.addWidget(label); row_l.addWidget(key); row_l.addStretch()
-            edit = QPushButton("Edit"); edit.setObjectName("Control")
-            edit.clicked.connect(lambda _, i=index: self.edit_custom_control(i)); row_l.addWidget(edit)
-            remove = QPushButton("Delete"); remove.setObjectName("ControlDelete")
-            remove.clicked.connect(lambda _, i=index: self.remove_custom_control(i)); row_l.addWidget(remove)
-            layout.addWidget(row)
-        layout.addStretch(1)
+        self.ensure_mapping_overlay()
+        self.controls_edit_mode = not self.controls_edit_mode
+        if self.controls_edit_mode:
+            self.mapping_overlay.show_editor()
+            self.mapping_status.setText(
+                "MAPPING EDITOR ACTIVE\n\n"
+                "All mapping controls are shown directly over the scrcpy phone window."
+            )
+            self.write_log("✓ Mapping editor opened over the scrcpy window.")
+        else:
+            self.mapping_overlay.finish_editing()
+            self.mapping_status.setText(
+                "Mapping editor closed.\n\n"
+                "Open Edit whenever you need to change controls."
+            )
+            self.write_log("✓ Mapping editor closed.")
+
     def edit_custom_control(self, index):
-        if index < 0 or index >= len(self.custom_controls): return
-        item = self.custom_controls[index]
-        label, ok = QInputDialog.getText(self, "Edit Button", "Button name:", text=str(item.get("label","Button")))
-        if not ok or not label.strip(): return
-        key, ok = QInputDialog.getText(self, "Bind Keyboard", "Keyboard key:", text=str(item.get("key","W")))
-        if not ok or not key.strip(): return
-        item["label"] = label.strip()[:18]; item["key"] = key.strip().upper(); item["keycode"] = self.qt_key_to_adb_keycode(item["key"]); item["type"] = "keyboard"
-        self.save_custom_controls(); self.refresh_mapping_workspace()
-        self.write_log(f"✓ Button updated: {item['label']} → {item['key']}")
+        if self.mapping_overlay and self.scrcpy.running():
+            self.mapping_overlay.show_editor()
 
     def remove_custom_control(self, index):
         if index < 0 or index >= len(self.custom_controls):
             return
-
         label = str(self.custom_controls[index].get("label", "Button"))
         self.custom_controls.pop(index)
         self.save_custom_controls()
-
+        if self.mapping_overlay:
+            self.mapping_overlay.rebuild_buttons()
         self.write_log(f"✓ Custom button removed: {label}")
-
-    def toggle_controls_edit(self):
-        self.controls_edit_mode = not self.controls_edit_mode
-        self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
-        self.edit_controls_button.setText(
-            "✓  Done" if self.controls_edit_mode else "✎  Edit"
-        )
-        self.add_mapping_button.setVisible(self.controls_edit_mode)
-        self.write_log(
-            "✓ Edit mode enabled. Drag or double-click mapping buttons."
-            if self.controls_edit_mode
-            else "✓ Edit mode disabled."
-        )
 
     def focus_scrcpy(self):
         try:
@@ -780,6 +720,7 @@ class MainWindow(QMainWindow):
             self.focus_scrcpy()
         except Exception as exc:
             self.write_log(f"✗ {label}: {exc}")
+
     def check_stream(self):
         if self.connected_serial and not self.scrcpy.running():
             self.scrcpy.read_output()
@@ -787,6 +728,9 @@ class MainWindow(QMainWindow):
             if self.scrcpy.last_output:
                 self.write_log(self.scrcpy.last_output[-2500:])
             self.connected_serial = None
+            if self.mapping_overlay:
+                self.mapping_overlay.hide()
+            self.controls_edit_mode = False
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
 
@@ -798,6 +742,9 @@ class MainWindow(QMainWindow):
     def disconnect(self):
         self.scrcpy.stop()
         self.connected_serial = None
+        if self.mapping_overlay:
+            self.mapping_overlay.hide()
+        self.controls_edit_mode = False
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
@@ -809,5 +756,9 @@ class MainWindow(QMainWindow):
         self.update_buttons()
 
     def closeEvent(self, event):
+        if self.mapping_overlay:
+            self.mapping_overlay.hide()
+            self.mapping_overlay.deleteLater()
+            self.mapping_overlay = None
         self.scrcpy.stop()
         event.accept()
