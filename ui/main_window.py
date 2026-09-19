@@ -607,7 +607,7 @@ class MainWindow(QMainWindow):
 
             self.connected_serial = serial
             self.ensure_mapping_overlay()
-            self.mapping_overlay.hide()
+            self.mapping_overlay.show_view_toolbar()
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
