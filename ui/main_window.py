@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QTextEdit,
     QInputDialog,
+    QDialog,
     QVBoxLayout,
     QWidget,
 )
@@ -515,7 +516,7 @@ class MainWindow(QMainWindow):
                 self.device_name.setText("No device selected")
                 self.device_meta.setText("Connect an Android phone with USB debugging enabled.")
                 self.info_text.setText("No device information yet.")
-                self.mapping_status.setText("▯\n\nWAITING FOR PHONE\n\nConnect USB • unlock phone • accept the ADB prompt")
+                self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nConnect an Android phone to create mappings.")
                 self.update_buttons()
                 return
 
@@ -560,17 +561,17 @@ class MainWindow(QMainWindow):
             self.header_state.setText("●  AUTHORIZE PHONE")
             self.stream_state.setText("●  AUTHORIZATION REQUIRED")
             self.stream_state.setObjectName("StatusWarn")
-            self.mapping_status.setText("▯\n\nUSB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
+            self.mapping_status.setText("USB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
         else:
             self.header_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setObjectName("StatusBad")
-            self.mapping_status.setText(f"▯\n\nADB DEVICE NOT READY\n\nADB reports: {device.state}")
+            self.mapping_status.setText(f"ADB DEVICE NOT READY\n\nADB reports: {device.state}")
 
         self.update_buttons()
 
     def status_label_fallback(self, text):
-        self.mapping_status.setText(f"▯\n\n{text}")
+        self.mapping_status.setText(text)
 
     def update_buttons(self):
         device = self.current_device()
@@ -641,9 +642,8 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
-            self.mapping_status.hide()
-                                    self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
-            self.editor_state.setText("Editor ready\nScrcpy is separate")
+            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
+            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
             self.write_log("✓ PhoneView mapping editor is ready.")
@@ -687,78 +687,59 @@ class MainWindow(QMainWindow):
                 self._clear_layout(child)
 
     def add_custom_control(self):
-        label, ok = QInputDialog.getText(
-            self, "Add Phone Button", "Button name:"
-        )
-        label = label.strip()
-        if not ok or not label:
+        if not self.controls_edit_mode:
+            self.toggle_controls_edit()
+        label, ok = QInputDialog.getText(self, "Add Button", "Button name:", text="Button")
+        if not ok or not label.strip():
             return
-
-        keycode, ok = QInputDialog.getInt(
-            self, "Android KeyCode", "ADB keycode:", 66, 0, 300, 1
-        )
-        if not ok:
+        key, ok = QInputDialog.getText(self, "Bind Keyboard", "Press/type the key to bind:", text="W")
+        if not ok or not key.strip():
             return
-
-        self.custom_controls.append({
-            "label": label[:18],
-            "keycode": keycode,
-            "type": "android_keyevent",
-            "x": 0.78,
-            "y": 0.72,
-            "w": 0.12,
-            "h": 0.07,
-        })
+        key = key.strip().upper()
+        self.custom_controls.append({"label": label.strip()[:18], "key": key, "type": "keyboard", "keycode": self.qt_key_to_adb_keycode(key)})
         self.save_custom_controls()
-                self.rebuild_controls()
-        self.write_log(f"✓ Custom button added: {label} → KEYCODE_{keycode}")
+        self.refresh_mapping_workspace()
+        self.write_log(f"✓ Button created: {label.strip()} → {key}")
 
+    def qt_key_to_adb_keycode(self, key):
+        return {"SPACE":62,"ENTER":66,"RETURN":66,"TAB":61,"BACKSPACE":67,"ESC":111,"LEFT":21,"RIGHT":22,"UP":19,"DOWN":20}.get(key)
+
+    def refresh_mapping_workspace(self):
+        layout = self.mapping_workspace.layout()
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+        title = QLabel("KEY MAPPING")
+        title.setObjectName("Eyebrow")
+        layout.addWidget(title)
+        if not self.custom_controls:
+            empty = QLabel("No buttons yet.\nClick Edit → Add Button to create your first mapping.")
+            empty.setObjectName("StageHint")
+            empty.setAlignment(Qt.AlignCenter)
+            layout.addStretch(1); layout.addWidget(empty); layout.addStretch(1)
+            return
+        for index, item in enumerate(self.custom_controls):
+            row = QFrame(); row.setObjectName("ControlPanel")
+            row_l = QHBoxLayout(row); row_l.setContentsMargins(12,8,12,8)
+            label = QLabel(str(item.get("label","Button"))); label.setObjectName("DeviceTitle"); label.setStyleSheet("font-size:11px;")
+            key = QLabel(str(item.get("key", item.get("keycode", "UNBOUND")))); key.setObjectName("Muted")
+            row_l.addWidget(label); row_l.addWidget(key); row_l.addStretch()
+            edit = QPushButton("Edit"); edit.setObjectName("Control")
+            edit.clicked.connect(lambda _, i=index: self.edit_custom_control(i)); row_l.addWidget(edit)
+            remove = QPushButton("Delete"); remove.setObjectName("ControlDelete")
+            remove.clicked.connect(lambda _, i=index: self.remove_custom_control(i)); row_l.addWidget(remove)
+            layout.addWidget(row)
+        layout.addStretch(1)
     def edit_custom_control(self, index):
-        if index < 0 or index >= len(self.custom_controls):
-            return
-
+        if index < 0 or index >= len(self.custom_controls): return
         item = self.custom_controls[index]
-        old_label = str(item.get("label", "Button"))
-        try:
-            old_keycode = int(item.get("keycode", 66))
-        except (TypeError, ValueError):
-            old_keycode = 66
-
-        label, ok = QInputDialog.getText(
-            self, "Edit Phone Button", "Button name:", text=old_label
-        )
-        label = label.strip()
-        if not ok or not label:
-            return
-
-        keycode, ok = QInputDialog.getInt(
-            self, "Edit Android KeyCode", "ADB keycode:",
-            old_keycode, 0, 300, 1
-        )
-        if not ok:
-            return
-
-        self.custom_controls[index] = {
-            "label": label[:18],
-            "keycode": keycode,
-        }
-        self.save_custom_controls()
-                self.rebuild_controls()
-        self.write_log(
-            f"✓ Custom button updated: {label} → KEYCODE_{keycode}"
-        )
-
-    def move_custom_control(self, index, direction):
-        new_index = index + direction
-        if index < 0 or new_index < 0 or new_index >= len(self.custom_controls):
-            return
-
-        self.custom_controls[index], self.custom_controls[new_index] = (
-            self.custom_controls[new_index],
-            self.custom_controls[index],
-        )
-        self.save_custom_controls()
-                self.rebuild_controls()
+        label, ok = QInputDialog.getText(self, "Edit Button", "Button name:", text=str(item.get("label","Button")))
+        if not ok or not label.strip(): return
+        key, ok = QInputDialog.getText(self, "Bind Keyboard", "Keyboard key:", text=str(item.get("key","W")))
+        if not ok or not key.strip(): return
+        item["label"] = label.strip()[:18]; item["key"] = key.strip().upper(); item["keycode"] = self.qt_key_to_adb_keycode(item["key"]); item["type"] = "keyboard"
+        self.save_custom_controls(); self.refresh_mapping_workspace()
+        self.write_log(f"✓ Button updated: {item['label']} → {item['key']}")
 
     def remove_custom_control(self, index):
         if index < 0 or index >= len(self.custom_controls):
@@ -767,12 +748,12 @@ class MainWindow(QMainWindow):
         label = str(self.custom_controls[index].get("label", "Button"))
         self.custom_controls.pop(index)
         self.save_custom_controls()
-                self.rebuild_controls()
+
         self.write_log(f"✓ Custom button removed: {label}")
 
     def toggle_controls_edit(self):
         self.controls_edit_mode = not self.controls_edit_mode
-        self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
+            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
         self.edit_controls_button.setText(
             "✓  Done" if self.controls_edit_mode else "✎  Edit"
         )
@@ -808,7 +789,7 @@ class MainWindow(QMainWindow):
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
-                        self.mapping_status.hide()
+
             self.editor_state.setText("VIEW MODE")
             self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
             self.header_state.setText("●  NOT CONNECTED")
@@ -820,7 +801,7 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
-                self.mapping_status.hide()
+
         self.editor_state.setText("VIEW MODE")
         self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
         self.header_state.setText("●  NO STREAM")
