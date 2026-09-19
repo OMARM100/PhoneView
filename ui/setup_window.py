@@ -25,7 +25,7 @@ class SetupWindow(QDialog):
         super().__init__(parent)
         self.setWindowTitle("PhoneView — Setup")
         self.resize(820, 620)
-        self.setMinimumSize(680, 500)
+        self.setMinimumSize(560, 430)
         self.setSizeGripEnabled(True)
 
         self.checker = DependencyChecker()
@@ -87,7 +87,7 @@ class SetupWindow(QDialog):
             }
             QPushButton {
                 min-height: 40px;
-                padding: 0 18px;
+                padding: 0 10px;
                 border-radius: 9px;
                 border: 1px solid #30363d;
                 background: #21262d;
@@ -143,7 +143,7 @@ class SetupWindow(QDialog):
         self.detail.setObjectName("Muted")
         self.detail.setWordWrap(True)
         self.detail.setMinimumHeight(28)
-        self.detail.setMaximumHeight(48)
+        self.detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
         card_layout.addWidget(self.detail)
 
         self.progress = QProgressBar()
@@ -155,6 +155,8 @@ class SetupWindow(QDialog):
         self.progress_text = QLabel("Starting...")
         self.progress_text.setObjectName("Muted")
         self.progress_text.setStyleSheet("color: #8b949e; font-size: 10px;")
+        self.progress_text.setWordWrap(True)
+        self.progress_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         card_layout.addWidget(self.progress_text)
 
         root.addWidget(card)
@@ -182,7 +184,7 @@ class SetupWindow(QDialog):
         self.log = QTextEdit()
         self.log.setReadOnly(True)
         self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.log.setMinimumHeight(120)
+        self.log.setMinimumHeight(80)
         self.log.setFont(QFont("DejaVu Sans Mono", 9))
         root.addWidget(self.log, 1)
 
@@ -201,10 +203,10 @@ class SetupWindow(QDialog):
         self.continue_button.clicked.connect(self.accept)
         self.continue_button.setEnabled(False)
 
-        buttons.addWidget(self.retry_button)
-        buttons.addWidget(self.cancel_button)
-        buttons.addStretch(1)
-        buttons.addWidget(self.continue_button)
+        buttons.setSpacing(6)
+        buttons.addWidget(self.retry_button, 1)
+        buttons.addWidget(self.cancel_button, 1)
+        buttons.addWidget(self.continue_button, 1)
         root.addLayout(buttons)
 
     def create_dependency_row(self, key):
@@ -224,10 +226,13 @@ class SetupWindow(QDialog):
         }[key])
         name.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
         name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        name.setWordWrap(True)
 
         state = QLabel("Waiting")
         state.setObjectName("State")
-        state.setMinimumWidth(125)
+        state.setMinimumWidth(95)
+        state.setMaximumWidth(125)
+        state.setWordWrap(True)
         state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         state.setStyleSheet("color: #8b949e;")
 
