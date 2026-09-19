@@ -467,7 +467,12 @@ class ScrcpyMappingOverlay(QWidget):
             return True
 
         if self.capture_mode and event.type() == QEvent.MouseButtonPress:
-            if watched is self.edit_button or watched is self.add_button or watched is self.done_button:
+            if (
+                watched is self.edit_button
+                or watched is self.add_button
+                or watched is self.done_button
+                or isinstance(watched, MappingButton)
+            ):
                 return False
 
             data = self.mouse_label(event.button())
