@@ -557,7 +557,6 @@ class SetupWindow(QDialog):
         self.process.start(
             self.pkexec_path(),
             [
-                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
@@ -663,7 +662,6 @@ class SetupWindow(QDialog):
         self.process.start(
             pkexec,
             [
-                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
@@ -789,13 +787,13 @@ class SetupWindow(QDialog):
     def find_graphical_auth_agent(self):
         """Return a known graphical Polkit agent executable, if installed."""
         candidates = [
+            "/usr/libexec/xfce-polkit",
+            "/usr/bin/xfce-polkit",
             "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
             "/usr/libexec/polkit-gnome-authentication-agent-1",
             "/usr/libexec/polkit-mate-authentication-agent-1",
-            "/usr/libexec/xfce-polkit",
             "/usr/bin/lxpolkit",
             "/usr/bin/mate-polkit",
-            "/usr/bin/xfce-polkit",
         ]
 
         for path in candidates:
@@ -803,9 +801,9 @@ class SetupWindow(QDialog):
                 return path
 
         for command in (
+            "xfce-polkit",
             "polkit-gnome-authentication-agent-1",
             "polkit-mate-authentication-agent-1",
-            "xfce-polkit",
             "lxpolkit",
             "mate-polkit",
         ):
@@ -827,13 +825,13 @@ class SetupWindow(QDialog):
 
         try:
             result = subprocess.run(
-                ["ps", "-u", str(os.getuid()), "-o", "comm="],
+                ["ps", "-u", str(os.getuid()), "-o", "args="],
                 capture_output=True,
                 text=True,
                 timeout=3,
             )
-            running = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-            return any(name in running for name in process_names)
+            output = result.stdout.lower()
+            return any(name.lower() in output for name in process_names)
         except (OSError, subprocess.SubprocessError):
             return False
 
@@ -871,9 +869,10 @@ class SetupWindow(QDialog):
 
             # Give the agent a moment to register itself with the current
             # session bus before pkexec sends its authorization request.
-            QTimer.singleShot(400, lambda: None)
+            QTimer.singleShot(1200, lambda: None)
 
             self.write_log("✓ Graphical Polkit agent started.")
+            self.write_log("Waiting briefly for the XFCE Polkit agent to register with the session bus.")
             return True
         except (OSError, RuntimeError) as exc:
             self.write_log(f"✗ Could not start graphical Polkit agent: {exc}")
