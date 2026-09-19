@@ -1,15 +1,17 @@
 import os
 import shutil
 import subprocess
+import sys
 
 
 class ScrcpyManager:
-    """Launch and control scrcpy across desktop platforms."""
+    """Launch and monitor scrcpy across desktop platforms."""
 
     def __init__(self):
         self.process = None
         self.scrcpy = self._find_scrcpy()
         self._help_text = None
+        self.last_output = ""
 
     @staticmethod
     def _find_scrcpy():
@@ -23,15 +25,13 @@ class ScrcpyManager:
                 os.path.expandvars(r"%ProgramFiles(x86)%\scrcpy\scrcpy.exe"),
                 os.path.expandvars(r"%USERPROFILE%\scoop\apps\scrcpy\current\scrcpy.exe"),
             ]
-        elif sys_platform := __import__("sys").platform:
+        else:
             candidates = [
                 "/usr/bin/scrcpy",
                 "/usr/local/bin/scrcpy",
                 os.path.expanduser("~/bin/scrcpy"),
                 "/snap/bin/scrcpy",
             ]
-        else:
-            candidates = []
 
         for path in candidates:
             if os.path.isfile(path) and os.access(path, os.X_OK):
@@ -62,7 +62,6 @@ class ScrcpyManager:
         if not self.scrcpy:
             self._help_text = ""
             return self._help_text
-
         try:
             result = subprocess.run(
                 [self.scrcpy, "--help"],
@@ -79,21 +78,21 @@ class ScrcpyManager:
         return option in self._help()
 
     def _build_command(self, serial):
-        # Start with the most conservative options so old scrcpy releases
-        # such as Ubuntu's 1.25 remain supported.
+        # Start with options known to work on scrcpy 1.25.
         cmd = [self.scrcpy, "-s", serial]
 
-        help_text = self._help()
-
-        if "--stay-awake" in help_text:
+        if self._supports("--stay-awake"):
             cmd.append("--stay-awake")
 
-        if "--window-title" in help_text:
+        if self._supports("--window-title"):
             cmd += ["--window-title", "PhoneView - Android"]
 
-        # Give the SDL window a predictable initial size when supported.
-        if "--window-width" in help_text and "--window-height" in help_text:
-            cmd += ["--window-width", "720", "--window-height", "1280"]
+        # Keep the mirror window visible when PhoneView starts it.
+        if self._supports("--always-on-top"):
+            cmd.append("--always-on-top")
+
+        if self._supports("--window-width") and self._supports("--window-height"):
+            cmd += ["--window-width", "420", "--window-height", "700"]
 
         return cmd
 
@@ -102,20 +101,18 @@ class ScrcpyManager:
 
     def start(self, serial):
         self.stop()
+        self.last_output = ""
 
         if not self.scrcpy:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
-        cmd = self._build_command(serial)
-
         env = os.environ.copy()
-
-        # Do not force a video driver: inherit the user's graphical desktop.
-        # This keeps X11/Wayland selection under SDL's control.
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
             raise RuntimeError(
                 "No graphical display session was found. Start PhoneView from your desktop session."
             )
+
+        cmd = self._build_command(serial)
 
         try:
             self.process = subprocess.Popen(
@@ -126,35 +123,45 @@ class ScrcpyManager:
                 bufsize=1,
                 env=env,
                 start_new_session=(os.name != "nt"),
-                creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0),
+                creationflags=(
+                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+                ),
             )
         except OSError as exc:
             self.process = None
             raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
 
-        # scrcpy normally creates its SDL window asynchronously. Only treat
-        # it as a failure if the process actually exits during startup.
+        # scrcpy creates its SDL window asynchronously. Wait only for an
+        # immediate startup failure; do not block until the mirror closes.
         try:
             self.process.wait(timeout=1.0)
         except subprocess.TimeoutExpired:
             return True
 
-        output = ""
-        try:
-            output = self.process.stdout.read().strip() if self.process.stdout else ""
-        except Exception:
-            pass
-
+        self._collect_output()
         code = self.process.returncode
         self.process = None
-        detail = output[-3000:] if output else f"scrcpy exited with code {code}."
+        detail = self.last_output[-3000:] if self.last_output else f"scrcpy exited with code {code}."
         raise RuntimeError(detail)
+
+    def _collect_output(self):
+        if not self.process or not self.process.stdout:
+            return
+        try:
+            data = self.process.stdout.read()
+            if data:
+                self.last_output = data.strip()
+        except Exception:
+            pass
 
     def read_output(self):
         if not self.process or not self.process.stdout:
             return ""
         try:
-            return self.process.stdout.read()
+            data = self.process.stdout.read()
+            if data:
+                self.last_output = data.strip()
+            return data
         except Exception:
             return ""
 
