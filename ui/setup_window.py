@@ -451,6 +451,11 @@ class SetupWindow(QDialog):
         self.process.errorOccurred.connect(
             self.process_error
         )
+        self.process.started.connect(
+            lambda: self.write_log(
+                "✓ System package installer process started."
+            )
+        )
 
         self.process.start(
             self.pkexec_path(),
@@ -587,8 +592,21 @@ class SetupWindow(QDialog):
             self.package_install_finished
         )
 
+        pkexec = self.pkexec_path()
+        if not pkexec:
+            self.fail_setup(
+                "Administrator authorization is unavailable.",
+                "pkexec disappeared before installation could start.",
+                1,
+            )
+            return
+
+        self.write_log(
+            f"Starting package installation with: {pkexec}"
+        )
+
         self.process.start(
-            "pkexec",
+            pkexec,
             [
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
