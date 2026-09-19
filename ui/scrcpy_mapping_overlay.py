@@ -1,9 +1,9 @@
 import re
 import subprocess
 
-from PySide6.QtCore import QApplication, QEvent, QTimer, Qt, Signal
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
 
 
 class MappingButton(QPushButton):
