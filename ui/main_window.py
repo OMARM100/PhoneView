@@ -733,7 +733,7 @@ class MainWindow(QMainWindow):
             self.mapping_editor.set_mappings(self.custom_controls)
             self.mapping_editor.show()
             self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
-            self.control_state.setText("Editor ready\nScrcpy is separate")
+            self.editor_state.setText("Editor ready\nScrcpy is separate")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
             self.write_log("✓ PhoneView mapping editor is ready.")
@@ -777,82 +777,9 @@ class MainWindow(QMainWindow):
                 self._clear_layout(child)
 
     def rebuild_controls(self):
-        self._clear_layout(self.controls_layout)
-        self.control_buttons = []
-
-        defaults = [
-            ("▲", 19), ("◀", 21), ("OK", 66), ("▶", 22), ("▼", 20),
-            ("BACK", 4), ("HOME", 3), ("SPACE", 62), ("SHIFT", 59),
-            ("CTRL", 113), ("E", 33), ("R", 46),
-        ]
-
-        for label, keycode in defaults:
-            self._add_control_row(label, keycode, False, None)
-
-        for index, item in enumerate(self.custom_controls):
-            label = str(item.get("label", "Button"))[:18]
-            try:
-                keycode = int(item.get("keycode", 0))
-            except (TypeError, ValueError):
-                keycode = 0
-            self._add_control_row(label, keycode, True, index)
-
-        self.controls_layout.addStretch()
-
-    def _add_control_row(self, label, keycode, is_custom, index):
-        row = QHBoxLayout()
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(3)
-
-        button = QPushButton(label)
-        button.setObjectName(
-            "ControlAccent"
-            if label in {"▲", "◀", "OK", "▶", "▼"}
-            else "Control"
-        )
-        button.setEnabled(self.scrcpy.running() and bool(self.connected_serial))
-        button.clicked.connect(
-            lambda checked=False, code=keycode, name=label: self.send_key(code, name)
-        )
-        row.addWidget(button, 1)
-        self.control_buttons.append(button)
-
-        if self.controls_edit_mode and is_custom:
-            edit = QPushButton("✎")
-            edit.setObjectName("Control")
-            edit.setFixedWidth(28)
-            edit.clicked.connect(
-                lambda checked=False, idx=index: self.edit_custom_control(idx)
-            )
-            row.addWidget(edit)
-
-            up = QPushButton("↑")
-            up.setObjectName("Control")
-            up.setFixedWidth(28)
-            up.setEnabled(index > 0)
-            up.clicked.connect(
-                lambda checked=False, idx=index: self.move_custom_control(idx, -1)
-            )
-            row.addWidget(up)
-
-            down = QPushButton("↓")
-            down.setObjectName("Control")
-            down.setFixedWidth(28)
-            down.setEnabled(index < len(self.custom_controls) - 1)
-            down.clicked.connect(
-                lambda checked=False, idx=index: self.move_custom_control(idx, 1)
-            )
-            row.addWidget(down)
-
-            remove = QPushButton("×")
-            remove.setObjectName("ControlDelete")
-            remove.setFixedWidth(28)
-            remove.clicked.connect(
-                lambda checked=False, idx=index: self.remove_custom_control(idx)
-            )
-            row.addWidget(remove)
-
-        self.controls_layout.addLayout(row)
+        """Refresh the visual mapping canvas after layout changes."""
+        if hasattr(self, "mapping_editor"):
+            self.mapping_editor.set_mappings(self.custom_controls)
 
     def add_custom_control(self):
         label, ok = QInputDialog.getText(
