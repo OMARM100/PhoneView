@@ -367,10 +367,7 @@ class SetupWindow(QDialog):
             self.finish_success()
             return
 
-        if (
-            sys.platform.startswith("linux")
-            and self.checker.command_exists("pkexec")
-        ):
+        if sys.platform.startswith("linux") and self.pkexec_path():
             self.status.setText("Missing components found")
             self.detail.setText(
                 "PhoneView will install them automatically. "
@@ -435,6 +432,9 @@ class SetupWindow(QDialog):
             "Automatic setup started."
         )
         self.write_log(
+            f"Using administrator authorization: {self.pkexec_path()}"
+        )
+        self.write_log(
             "A system permission dialog may appear now."
         )
 
@@ -453,7 +453,7 @@ class SetupWindow(QDialog):
         )
 
         self.process.start(
-            "pkexec",
+            self.pkexec_path(),
             [
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
@@ -730,12 +730,29 @@ class SetupWindow(QDialog):
             "libxcb-cursor0": "xcb",
         }.get(package)
 
+    def pkexec_path(self):
+        """Return pkexec even when a desktop-launched PATH is incomplete."""
+        if not sys.platform.startswith("linux"):
+            return None
+
+        import os
+
+        if self.checker.command_exists("pkexec"):
+            return "pkexec"
+
+        for path in ("/usr/bin/pkexec", "/bin/pkexec"):
+            if os.path.isfile(path):
+                return path
+
+        return None
+
     def manual_install_message(self):
         if sys.platform.startswith("linux"):
             return (
-                "Automatic installation requires the system "
-                "authorization service (pkexec). Install the "
-                "missing components manually, then click Check again."
+                "Automatic installation requires pkexec (the system "
+                "authorization helper). It is not available on this "
+                "system. Install it once with: sudo apt install policykit-1. "
+                "Then click Check again."
             )
 
         if sys.platform == "darwin":
