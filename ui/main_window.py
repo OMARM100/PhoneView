@@ -1,5 +1,7 @@
+import json
 import os
 import subprocess
+from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QWindow
@@ -15,6 +17,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QTextEdit,
+    QInputDialog,
     QVBoxLayout,
     QWidget,
 )
@@ -111,6 +114,15 @@ QPushButton#Control, QPushButton#ControlAccent {
     padding: 0 8px;
     font-size: 9px;
     border-radius: 8px;
+}
+QPushButton#ControlDelete {
+    min-height: 32px;
+    min-width: 28px;
+    max-width: 28px;
+    padding: 0;
+    color: #FF7777;
+    background: #241316;
+    border-color: #4B252A;
 }
 QPushButton#ControlAccent {
     background: #172B4A;
@@ -209,6 +221,9 @@ class MainWindow(QMainWindow):
         self.scrcpy_container = None
         self.scrcpy_window_id = None
         self.embed_attempts = 0
+        self.controls_edit_mode = False
+        self.control_buttons = []
+        self.custom_controls = self.load_custom_controls()
 
         self.build_ui()
 
@@ -344,47 +359,45 @@ class MainWindow(QMainWindow):
 
         controls = QFrame()
         controls.setObjectName("ControlPanel")
-        controls.setFixedWidth(132)
-        cl = QVBoxLayout(controls)
-        cl.setContentsMargins(8, 8, 8, 8)
-        cl.setSpacing(6)
+        controls.setFixedWidth(176)
+        self.control_panel_layout = QVBoxLayout(controls)
+        self.control_panel_layout.setContentsMargins(8, 8, 8, 8)
+        self.control_panel_layout.setSpacing(6)
+
         title = QLabel("PHONE CONTROLS")
         title.setObjectName("Eyebrow")
         title.setAlignment(Qt.AlignCenter)
-        cl.addWidget(title)
+        self.control_panel_layout.addWidget(title)
+
         self.control_state = QLabel("Embedded\\ninput ready")
         self.control_state.setObjectName("Muted")
         self.control_state.setAlignment(Qt.AlignCenter)
-        cl.addWidget(self.control_state)
+        self.control_panel_layout.addWidget(self.control_state)
 
-        def add_control(text, keycode, accent=False):
-            button = QPushButton(text)
-            button.setObjectName("ControlAccent" if accent else "Control")
-            button.clicked.connect(lambda: self.send_key(keycode, text))
-            cl.addWidget(button)
-            return button
+        self.controls_container = QFrame()
+        self.controls_container.setObjectName("ControlsContainer")
+        self.controls_layout = QVBoxLayout(self.controls_container)
+        self.controls_layout.setContentsMargins(0, 0, 0, 0)
+        self.controls_layout.setSpacing(5)
+        self.control_panel_layout.addWidget(self.controls_container, 1)
 
-        dpad = QFrame()
-        dl = QVBoxLayout(dpad)
-        dl.setContentsMargins(0, 0, 0, 0)
-        dl.setSpacing(4)
-        dl.addWidget(add_control("▲", 19, True))
-        mid = QHBoxLayout()
-        mid.setSpacing(4)
-        mid.addWidget(add_control("◀", 21, True))
-        mid.addWidget(add_control("OK", 66, True))
-        mid.addWidget(add_control("▶", 22, True))
-        dl.addLayout(mid)
-        dl.addWidget(add_control("▼", 20, True))
-        cl.addWidget(dpad)
-        for label, code in [("BACK",4),("HOME",3),("SPACE",62),("SHIFT",59),("CTRL",113),("E",33),("R",46)]:
-            add_control(label, code)
+        add_button = QPushButton("＋  Add Button")
+        add_button.setObjectName("ControlAccent")
+        add_button.clicked.connect(self.add_custom_control)
+        self.control_panel_layout.addWidget(add_button)
+
+        self.edit_controls_button = QPushButton("✎  Edit Buttons")
+        self.edit_controls_button.setObjectName("Control")
+        self.edit_controls_button.clicked.connect(self.toggle_controls_edit)
+        self.control_panel_layout.addWidget(self.edit_controls_button)
+
         focus = QPushButton("Focus Screen")
         focus.setObjectName("ControlAccent")
         focus.clicked.connect(self.focus_scrcpy)
-        cl.addWidget(focus)
-        cl.addStretch()
+        self.control_panel_layout.addWidget(focus)
+
         stage_l.addWidget(controls)
+        self.rebuild_controls()
         hero_l.addWidget(stage, 1)
 
         self.progress = QProgressBar()
@@ -666,6 +679,105 @@ class MainWindow(QMainWindow):
         finally:
             self.update_buttons()
 
+    def load_custom_controls(self):
+        path = Path.home() / ".config" / "PhoneView" / "controls.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except (OSError, json.JSONDecodeError):
+            return []
+
+    def save_custom_controls(self):
+        path = Path.home() / ".config" / "PhoneView" / "controls.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(self.custom_controls, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            self.write_log(f"! Could not save custom buttons: {exc}")
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child = item.layout()
+            if widget:
+                widget.deleteLater()
+            elif child:
+                self._clear_layout(child)
+
+    def rebuild_controls(self):
+        self._clear_layout(self.controls_layout)
+
+        defaults = [
+            ("▲", 19), ("◀", 21), ("OK", 66), ("▶", 22), ("▼", 20),
+            ("BACK", 4), ("HOME", 3), ("SPACE", 62), ("SHIFT", 59),
+            ("CTRL", 113), ("E", 33), ("R", 46),
+        ]
+        controls = defaults + [
+            (item.get("label", "Button"), int(item.get("keycode", 0)))
+            for item in self.custom_controls
+        ]
+
+        for label, keycode in controls:
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(4)
+
+            button = QPushButton(label)
+            button.setObjectName("ControlAccent" if label in {"▲", "◀", "OK", "▶", "▼"} else "Control")
+            button.setEnabled(self.scrcpy.running() and bool(self.connected_serial))
+            button.clicked.connect(lambda checked=False, code=keycode, name=label: self.send_key(code, name))
+            row.addWidget(button, 1)
+            self.control_buttons.append(button)
+
+            if self.controls_edit_mode:
+                remove = QPushButton("×")
+                remove.setObjectName("ControlDelete")
+                remove.setFixedWidth(28)
+                remove.clicked.connect(
+                    lambda checked=False, name=label, code=keycode: self.remove_custom_control(name, code)
+                )
+                row.addWidget(remove)
+
+            self.controls_layout.addLayout(row)
+
+        self.controls_layout.addStretch()
+
+    def add_custom_control(self):
+        label, ok = QInputDialog.getText(self, "Add Phone Button", "Button name:")
+        if not ok or not label.strip():
+            return
+        keycode, ok = QInputDialog.getInt(
+            self, "Android KeyCode", "ADB keycode:", 66, 0, 300, 1
+        )
+        if not ok:
+            return
+        self.custom_controls.append({"label": label.strip()[:18], "keycode": keycode})
+        self.save_custom_controls()
+        self.rebuild_controls()
+        self.write_log(f"✓ Custom button added: {label.strip()} → KEYCODE_{keycode}")
+
+    def remove_custom_control(self, label, keycode):
+        for i, item in enumerate(self.custom_controls):
+            if item.get("label") == label and int(item.get("keycode", -1)) == keycode:
+                self.custom_controls.pop(i)
+                break
+        self.save_custom_controls()
+        self.rebuild_controls()
+        self.write_log(f"✓ Custom button removed: {label}")
+
+    def toggle_controls_edit(self):
+        self.controls_edit_mode = not self.controls_edit_mode
+        self.edit_controls_button.setText(
+            "✓  Done Editing" if self.controls_edit_mode else "✎  Edit Buttons"
+        )
+        self.rebuild_controls()
+        self.write_log(
+            "✓ Button edit mode enabled. Use × to remove custom buttons."
+            if self.controls_edit_mode
+            else "✓ Button edit mode disabled."
+        )
+
     def _find_scrcpy_window_id(self):
         try:
             result = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True, timeout=2)
@@ -709,6 +821,7 @@ class MainWindow(QMainWindow):
             self.control_state.setText("Embedded\nmouse + keyboard")
             self.write_log("✓ Android screen embedded inside PhoneView.")
             self.write_log("✓ Mouse and keyboard input are forwarded by scrcpy.")
+            self.rebuild_controls()
             self.update_buttons()
             self.focus_scrcpy()
         except Exception as exc:
