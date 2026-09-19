@@ -179,6 +179,12 @@ class ScrcpyManager:
                 "No graphical display session was found. Start PhoneView from the desktop session."
             )
 
+        # PhoneView embeds the native scrcpy window. On Linux/Wayland, use
+        # XWayland when available so Qt can attach the X11 child window.
+        # This avoids opening a second visible scrcpy window outside PhoneView.
+        if os.name != "nt" and env.get("DISPLAY"):
+            env["SDL_VIDEODRIVER"] = "x11"
+
         self._open_log()
 
         try:
