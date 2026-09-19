@@ -1,11 +1,14 @@
 import os
+import re
 import shutil
 import subprocess
 import sys
 
 
 class DependencyChecker:
-    """Detects the external components required by PhoneView."""
+    """Detect required components and flag obsolete scrcpy installations."""
+
+    MIN_SCRCPY_MAJOR = 2
 
     def __init__(self):
         self.platform = sys.platform
@@ -27,11 +30,44 @@ class DependencyChecker:
         except (OSError, subprocess.SubprocessError):
             return False
 
+    @staticmethod
+    def scrcpy_version():
+        try:
+            result = subprocess.run(
+                ["scrcpy", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            output = (result.stdout or result.stderr or "").strip()
+            match = re.search(r"scrcpy\\s+(\\d+)\\.(\\d+)", output, re.IGNORECASE)
+            return (int(match.group(1)), int(match.group(2))) if match else None
+        except (OSError, subprocess.SubprocessError):
+            return None
+
+    def scrcpy_ok(self):
+        if not self.command_exists("scrcpy"):
+            return False
+        version = self.scrcpy_version()
+        if version is None:
+            return True
+        return version[0] >= self.MIN_SCRCPY_MAJOR
+
     def check(self):
         if self.platform.startswith("linux"):
             return [
-                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": "adb"},
-                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
+                {
+                    "id": "adb",
+                    "name": "Android Debug Bridge (ADB)",
+                    "ok": self.command_exists("adb"),
+                    "package": "adb",
+                },
+                {
+                    "id": "scrcpy",
+                    "name": "scrcpy (current release)",
+                    "ok": self.scrcpy_ok(),
+                    "package": "scrcpy",
+                },
                 {
                     "id": "xcb",
                     "name": "Qt XCB cursor support",
@@ -42,14 +78,34 @@ class DependencyChecker:
 
         if self.platform == "darwin":
             return [
-                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": "android-platform-tools"},
-                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
+                {
+                    "id": "adb",
+                    "name": "Android Debug Bridge (ADB)",
+                    "ok": self.command_exists("adb"),
+                    "package": "android-platform-tools",
+                },
+                {
+                    "id": "scrcpy",
+                    "name": "scrcpy (current release)",
+                    "ok": self.scrcpy_ok(),
+                    "package": "scrcpy",
+                },
             ]
 
         if os.name == "nt":
             return [
-                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": None},
-                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": None},
+                {
+                    "id": "adb",
+                    "name": "Android Debug Bridge (ADB)",
+                    "ok": self.command_exists("adb"),
+                    "package": None,
+                },
+                {
+                    "id": "scrcpy",
+                    "name": "scrcpy (current release)",
+                    "ok": self.scrcpy_ok(),
+                    "package": None,
+                },
             ]
 
         return []
