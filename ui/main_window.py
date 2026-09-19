@@ -63,9 +63,19 @@ QListWidget#Devices::item { background: transparent; border: none; padding: 0; m
 QListWidget#Devices::item:selected { background: transparent; }
 
 QFrame#PhoneStage {
-    background: #0A0E14;
+    background: #070A0F;
     border: 1px solid #202A37;
     border-radius: 16px;
+}
+QFrame#MirrorHost {
+    background: #020305;
+    border: 1px solid #1D2632;
+    border-radius: 13px;
+}
+QFrame#ControlPanel {
+    background: #0B1017;
+    border: 1px solid #202A37;
+    border-radius: 13px;
 }
 QLabel#PhoneGlyph {
     color: #5D8EFF;
@@ -95,6 +105,25 @@ QPushButton#Primary {
 }
 QPushButton#Primary:hover { background: #3C82F0; border-color: #3C82F0; }
 QPushButton#Danger { color: #FF9292; }
+QPushButton#Control, QPushButton#ControlAccent {
+    min-height: 32px;
+    min-width: 54px;
+    padding: 0 8px;
+    font-size: 9px;
+    border-radius: 8px;
+}
+QPushButton#ControlAccent {
+    background: #172B4A;
+    border-color: #315E99;
+    color: #8DB8FF;
+}
+QLineEdit {
+    background: #0B1017;
+    border: 1px solid #293443;
+    border-radius: 9px;
+    padding: 8px 10px;
+    color: #FFFFFF;
+}
 
 QProgressBar {
     background: #090D13;
@@ -488,8 +517,7 @@ class MainWindow(QMainWindow):
                 self.device_name.setText("No device selected")
                 self.device_meta.setText("Connect an Android phone with USB debugging enabled.")
                 self.info_text.setText("No device information yet.")
-                self.stage_state.setText("WAITING FOR PHONE")
-                self.stage_hint.setText("Connect USB • unlock phone • accept the ADB prompt")
+                self.mirror_placeholder.setText("▯\n\nWAITING FOR PHONE\n\nConnect USB • unlock phone • accept the ADB prompt")
                 self.update_buttons()
                 return
 
@@ -529,25 +557,22 @@ class MainWindow(QMainWindow):
             self.header_state.setText("●  DEVICE READY")
             self.stream_state.setText("●  READY")
             self.stream_state.setObjectName("StatusGood")
-            self.stage_state.setText("READY TO MIRROR")
-            self.stage_hint.setText("Click Connect & View to open the live Android screen.")
+            self.mirror_placeholder.setText("▯\n\nPHONE SCREEN\n\nClick Connect & View to start the embedded Android screen.")
         elif device.state == "unauthorized":
             self.header_state.setText("●  AUTHORIZE PHONE")
             self.stream_state.setText("●  AUTHORIZATION REQUIRED")
             self.stream_state.setObjectName("StatusWarn")
-            self.stage_state.setText("USB AUTHORIZATION REQUIRED")
-            self.stage_hint.setText("Unlock the phone and accept the USB debugging dialog.")
+            self.mirror_placeholder.setText("▯\n\nUSB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
         else:
             self.header_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setObjectName("StatusBad")
-            self.stage_state.setText("ADB DEVICE NOT READY")
-            self.stage_hint.setText(f"ADB reports: {device.state}")
+            self.mirror_placeholder.setText(f"▯\n\nADB DEVICE NOT READY\n\nADB reports: {device.state}")
 
         self.update_buttons()
 
     def status_label_fallback(self, text):
-        self.stage_hint.setText(text)
+        self.mirror_placeholder.setText(f"▯\n\n{text}")
 
     def update_buttons(self):
         device = self.current_device()
@@ -555,6 +580,9 @@ class MainWindow(QMainWindow):
         legacy = self.scrcpy.is_legacy()
         self.connect_button.setEnabled(ready and self.scrcpy.available() and not legacy and not self.scrcpy.running())
         self.disconnect_button.setEnabled(self.scrcpy.running())
+        for button in self.findChildren(QPushButton):
+            if button.objectName() in ("Control", "ControlAccent"):
+                button.setEnabled(ready and self.scrcpy.running())
 
     def connect_selected(self):
         device = self.current_device()
@@ -607,17 +635,7 @@ class MainWindow(QMainWindow):
                 f"Android: {android}\nSDK: {sdk}\nSerial: {serial}"
             )
 
-            # Use the project name as the external Android mirror window title.
-            original_build = self.scrcpy._build_command
-            def project_build(selected_serial):
-                command = original_build(selected_serial)
-                if "--window-title" in command:
-                    index = command.index("--window-title")
-                    if index + 1 < len(command):
-                        command[index + 1] = self.project_name
-                return command
-            self.scrcpy._build_command = project_build
-            self.scrcpy.start(serial)
+            self.scrcpy.start(serial, self.project_name)
 
             if not self.scrcpy.running():
                 raise RuntimeError("scrcpy exited before the mirror window was created.")
