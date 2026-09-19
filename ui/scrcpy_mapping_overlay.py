@@ -1,3 +1,5 @@
+import ctypes
+import os
 import re
 import subprocess
 
@@ -81,12 +83,13 @@ class ScrcpyMappingOverlay(QWidget):
         self.capture_mode = False
         self.edit_mode = False
         self.overlay_mode = "toolbar"
+        self.scrcpy_window_id = None
+        self.reparented = False
+        self._x11_display = None
+        self._x11 = None
 
-        self.setWindowFlags(
-            Qt.FramelessWindowHint
-            | Qt.Tool
-            | Qt.WindowStaysOnTopHint
-        )
+        # Starts as a Qt top-level, then becomes an actual X11 child of scrcpy.
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         self.setFocusPolicy(Qt.StrongFocus)
@@ -190,6 +193,164 @@ class ScrcpyMappingOverlay(QWidget):
 
         self.rebuild_buttons()
 
+    def _find_scrcpy_window_id(self):
+        """Find the external scrcpy X11 client window."""
+        title = self.window_title.strip()
+        if not title or os.name == "nt":
+            return None
+
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--onlyvisible", "--name", title],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            if result.returncode == 0:
+                ids = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                if ids:
+                    return int(ids[0])
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+
+        try:
+            result = subprocess.run(
+                ["wmctrl", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    parts = line.split(None, 3)
+                    if len(parts) < 4:
+                        continue
+                    candidate = parts[3].strip()
+                    if candidate == title or title in candidate or candidate in title:
+                        return int(parts[0], 16)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+
+        return None
+
+    def _load_x11(self):
+        if os.name == "nt" or not os.environ.get("DISPLAY"):
+            return False
+        if self._x11 is not None and self._x11_display:
+            return True
+
+        try:
+            self._x11 = ctypes.CDLL("libX11.so.6")
+
+            self._x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+            self._x11.XOpenDisplay.restype = ctypes.c_void_p
+
+            self._x11.XReparentWindow.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_ulong,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            self._x11.XReparentWindow.restype = ctypes.c_int
+
+            self._x11.XMoveResizeWindow.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_ulong,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_uint,
+                ctypes.c_uint,
+            ]
+            self._x11.XMoveResizeWindow.restype = None
+
+            self._x11.XMapRaised.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+            self._x11.XMapRaised.restype = None
+
+            self._x11.XRaiseWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+            self._x11.XRaiseWindow.restype = None
+
+            self._x11.XFlush.argtypes = [ctypes.c_void_p]
+            self._x11.XFlush.restype = None
+
+            self._x11_display = self._x11.XOpenDisplay(None)
+            if not self._x11_display:
+                self._x11 = None
+                return False
+
+            return True
+        except OSError:
+            self._x11 = None
+            self._x11_display = None
+            return False
+
+    def _native_window_id(self):
+        try:
+            return int(self.winId())
+        except (TypeError, ValueError):
+            return None
+
+    def _attach_to_scrcpy(self):
+        """Make this Qt native window a real child of the scrcpy X11 window."""
+        if self.reparented and self.scrcpy_window_id:
+            return True
+
+        if not self._load_x11():
+            return False
+
+        parent_id = self._find_scrcpy_window_id()
+        child_id = self._native_window_id()
+
+        if not parent_id or not child_id or parent_id == child_id:
+            return False
+
+        try:
+            self._x11.XReparentWindow(
+                self._x11_display,
+                ctypes.c_ulong(child_id),
+                ctypes.c_ulong(parent_id),
+                8,
+                8,
+            )
+            self._x11.XMapRaised(
+                self._x11_display,
+                ctypes.c_ulong(child_id),
+            )
+            self._x11.XFlush(self._x11_display)
+
+            self.scrcpy_window_id = parent_id
+            self.reparented = True
+            return True
+        except Exception:
+            self.scrcpy_window_id = None
+            self.reparented = False
+            return False
+
+    def _position_native_child(self, x, y, width, height):
+        if not self.reparented or not self._load_x11():
+            return
+
+        child_id = self._native_window_id()
+        if not child_id:
+            return
+
+        try:
+            self._x11.XMoveResizeWindow(
+                self._x11_display,
+                ctypes.c_ulong(child_id),
+                int(x),
+                int(y),
+                max(1, int(width)),
+                max(1, int(height)),
+            )
+            self._x11.XRaiseWindow(
+                self._x11_display,
+                ctypes.c_ulong(child_id),
+            )
+            self._x11.XFlush(self._x11_display)
+        except Exception:
+            pass
+
     def _find_window_geometry(self):
         title = self.window_title.strip()
         if not title:
@@ -271,20 +432,29 @@ class ScrcpyMappingOverlay(QWidget):
             return False
 
         self.overlay_mode = "toolbar"
-        self.root.setGeometry(0, 0, self.width(), self.height())
-
         self.toolbar.adjustSize()
-        toolbar_w = min(max(self.toolbar.sizeHint().width() + 6, 170), max(170, w - 16))
+
+        toolbar_w = min(
+            max(self.toolbar.sizeHint().width() + 6, 170),
+            max(170, w - 16),
+        )
         toolbar_h = max(self.toolbar.sizeHint().height() + 4, 54)
 
-        self.setGeometry(
-            x + 8,
-            y + 8,
-            toolbar_w,
-            min(toolbar_h, max(54, h - 16)),
-        )
-        self.root.setGeometry(0, 0, self.width(), self.height())
-        self.toolbar.move(0, 0)
+        if self.reparented:
+            self.resize(toolbar_w, toolbar_h)
+            self.root.setGeometry(0, 0, toolbar_w, toolbar_h)
+            self.toolbar.move(0, 0)
+            self._position_native_child(8, 8, toolbar_w, toolbar_h)
+        else:
+            self.setGeometry(
+                x + 8,
+                y + 8,
+                toolbar_w,
+                min(toolbar_h, max(54, h - 16)),
+            )
+            self.root.setGeometry(0, 0, self.width(), self.height())
+            self.toolbar.move(0, 0)
+
         return True
 
     def show_view_toolbar(self):
@@ -293,12 +463,15 @@ class ScrcpyMappingOverlay(QWidget):
         self._set_toolbar_state(False)
         self.status.setText("VIEW MODE")
         self.show()
-        self.raise_()
 
         def place():
             geometry = self._find_window_geometry()
             if not geometry:
                 return False
+
+            if not self.reparented:
+                self._attach_to_scrcpy()
+
             return self._position_toolbar(geometry)
 
         self._scrcpy_retry(place)
@@ -306,15 +479,23 @@ class ScrcpyMappingOverlay(QWidget):
     def show_editor(self):
         geometry = self._find_window_geometry()
 
+        self.overlay_mode = "editor"
+        self.edit_mode = True
+        self.capture_mode = False
+
         if geometry:
             x, y, w, h = geometry
-            self.overlay_mode = "editor"
-            self.edit_mode = True
-            self.capture_mode = False
-            self.setGeometry(x, y, w, h)
+
+            if not self.reparented:
+                self._attach_to_scrcpy()
+
+            self.resize(w, h)
             self.root.setGeometry(0, 0, w, h)
-        else:
-            self.edit_mode = True
+
+            if self.reparented:
+                self._position_native_child(0, 0, w, h)
+            else:
+                self.setGeometry(x, y, w, h)
 
         self._set_toolbar_state(True)
         self.show()
@@ -500,14 +681,22 @@ class ScrcpyMappingOverlay(QWidget):
         if w < 120 or h < 120:
             return
 
+        if not self.reparented:
+            self._attach_to_scrcpy()
+
         if self.overlay_mode == "toolbar" and not self.edit_mode:
             self._position_toolbar((x, y, w, h))
             return
 
-        self.setGeometry(x, y, w, h)
+        self.resize(w, h)
         self.root.setGeometry(0, 0, w, h)
         self.toolbar.adjustSize()
         self.toolbar.move(0, 0)
+
+        if self.reparented:
+            self._position_native_child(0, 0, w, h)
+        else:
+            self.setGeometry(x, y, w, h)
 
         for button in self.findChildren(MappingButton):
             item = button.item
