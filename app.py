@@ -9,9 +9,11 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("PhoneView")
 
+    # If the environment is already complete, skip the setup dialog entirely.
     setup = SetupWindow()
-    if setup.exec() != SetupWindow.Accepted:
-        return
+    if setup.checker.has_missing():
+        if setup.exec() != SetupWindow.Accepted:
+            return
 
     window = MainWindow()
     window.show()
