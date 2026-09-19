@@ -108,13 +108,13 @@ class ScrcpyManager:
     def _supports(self, option):
         return option in self._help()
 
-    def _build_command(self, serial):
+    def _build_command(self, serial, project_name="Android Project"):
         cmd = [
             self.scrcpy,
             "-s",
             serial,
             "--window-title",
-            "PhoneView - Android",
+            " ".join(str(project_name).split()).strip()[:80] or "Android Project",
         ]
 
         for option in ("--stay-awake", "--always-on-top"):
@@ -166,7 +166,7 @@ class ScrcpyManager:
                 pass
         self._log_path = None
 
-    def start(self, serial):
+    def start(self, serial, project_name="Android Project"):
         self.stop()
         self.last_output = ""
 
@@ -183,7 +183,7 @@ class ScrcpyManager:
 
         try:
             self.process = subprocess.Popen(
-                self._build_command(serial),
+                self._build_command(serial, project_name),
                 stdout=self._log_file,
                 stderr=subprocess.STDOUT,
                 env=env,
@@ -237,3 +237,17 @@ class ScrcpyManager:
             self.last_output = output
 
         self._cleanup_log()
+
+
+    def adb_keyevent(self, serial, keycode):
+        if not serial:
+            raise RuntimeError("No Android device is selected.")
+        result = subprocess.run(
+            ["adb", "-s", serial, "shell", "input", "keyevent", str(keycode)],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "ADB key event failed.").strip())
+        return True
