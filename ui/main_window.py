@@ -730,7 +730,11 @@ class MainWindow(QMainWindow):
             row.addWidget(button, 1)
             self.control_buttons.append(button)
 
-            if self.controls_edit_mode:
+            is_custom = any(
+                item.get("label") == label and int(item.get("keycode", -1)) == keycode
+                for item in self.custom_controls
+            )
+            if self.controls_edit_mode and is_custom:
                 remove = QPushButton("×")
                 remove.setObjectName("ControlDelete")
                 remove.setFixedWidth(28)
