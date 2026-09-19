@@ -1,3 +1,4 @@
+import os
 import re
 import sys
 
@@ -76,6 +77,7 @@ class SetupWindow(QDialog):
         self.checker = DependencyChecker()
         self.process = None
         self.installing = False
+        self.cancelling = False
         self.current_packages = []
         self.package_progress = {}
         self.rows = {}
@@ -245,10 +247,7 @@ class SetupWindow(QDialog):
     def create_dependency_row(self, key):
         row = QFrame()
         row.setObjectName("DependencyRow")
-        row.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Minimum,
-        )
+        row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         layout = QHBoxLayout(row)
         layout.setContentsMargins(10, 7, 10, 7)
@@ -267,21 +266,13 @@ class SetupWindow(QDialog):
         }[key])
         name.setObjectName("DependencyName")
         name.setWordWrap(True)
-        name.setSizePolicy(
-            QSizePolicy.Expanding,
-            QSizePolicy.Preferred,
-        )
+        name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         state = QLabel("Waiting")
         state.setObjectName("DependencyState")
         state.setWordWrap(True)
-        state.setAlignment(
-            Qt.AlignRight | Qt.AlignVCenter
-        )
-        state.setSizePolicy(
-            QSizePolicy.Preferred,
-            QSizePolicy.Preferred,
-        )
+        state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        state.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         state.setMinimumWidth(78)
         state.setMaximumWidth(130)
 
@@ -289,35 +280,23 @@ class SetupWindow(QDialog):
         layout.addWidget(name, 1)
         layout.addWidget(state)
 
-        self.rows[key] = {
-            "row": row,
-            "icon": icon,
-            "state": state,
-        }
+        self.rows[key] = {"row": row, "icon": icon, "state": state}
         return row
 
     def set_row(self, key, state, icon, color):
         item = self.rows.get(key)
         if not item:
             return
-
         item["icon"].setText(icon)
-        item["icon"].setStyleSheet(
-            f"color: {color};"
-        )
+        item["icon"].setStyleSheet(f"color: {color};")
         item["state"].setText(state)
-        item["state"].setStyleSheet(
-            f"color: {color};"
-        )
+        item["state"].setStyleSheet(f"color: {color};")
 
     def write_log(self, text):
-        if not text:
-            return
-
-        self.log.append(text.rstrip())
-
-        scrollbar = self.log.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        if text:
+            self.log.append(text.rstrip())
+            scrollbar = self.log.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
 
     def set_progress(self, value, text):
         value = max(0, min(100, int(value)))
@@ -330,14 +309,13 @@ class SetupWindow(QDialog):
             return
 
         self.installing = False
+        self.cancelling = False
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
 
         self.status.setText("Checking your system...")
-        self.detail.setText(
-            "Detecting ADB, scrcpy and the required system libraries."
-        )
+        self.detail.setText("Detecting ADB, scrcpy and the required system libraries.")
         self.set_progress(5, "Scanning installed components...")
         self.write_log("Starting dependency check.")
 
@@ -346,22 +324,11 @@ class SetupWindow(QDialog):
 
         for item in items:
             if item["ok"]:
-                self.set_row(
-                    item["id"], "Ready", "✓", "#4CAF50"
-                )
-                self.write_log(
-                    f"✓ {item['name']} is ready."
-                )
+                self.set_row(item["id"], "Ready", "✓", "#4CAF50")
+                self.write_log(f"✓ {item['name']} is ready.")
             else:
-                self.set_row(
-                    item["id"],
-                    "Missing — will install",
-                    "↓",
-                    "#FFB300",
-                )
-                self.write_log(
-                    f"↓ {item['name']} is missing."
-                )
+                self.set_row(item["id"], "Missing — will install", "↓", "#FFB300")
+                self.write_log(f"↓ {item['name']} is missing.")
 
         if not missing:
             self.finish_success()
@@ -370,27 +337,17 @@ class SetupWindow(QDialog):
         if sys.platform.startswith("linux") and self.pkexec_path():
             self.status.setText("Missing components found")
             self.detail.setText(
-                "PhoneView will install them automatically. "
-                "You may only need to approve the system permission dialog."
+                "PhoneView will ask the operating system for administrator permission. "
+                "Your password is entered only in the system authentication dialog and "
+                "is never received or stored by PhoneView."
             )
-            self.set_progress(
-                15,
-                f"Preparing automatic installation of "
-                f"{len(missing)} component(s)...",
-            )
+            self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
             QTimer.singleShot(500, self.start_install)
             return
 
-        self.status.setText(
-            "Automatic installation is unavailable"
-        )
-        self.detail.setText(
-            self.manual_install_message()
-        )
-        self.set_progress(
-            15,
-            "Waiting for manual setup."
-        )
+        self.status.setText("Automatic installation is unavailable")
+        self.detail.setText(self.manual_install_message())
+        self.set_progress(15, "Waiting for manual setup.")
         self.cancel_button.setEnabled(True)
 
     def start_install(self):
@@ -398,16 +355,14 @@ class SetupWindow(QDialog):
             return
 
         packages = self.checker.missing_linux_packages()
-
         if not packages:
             self.run_check()
             return
 
         self.installing = True
+        self.cancelling = False
         self.current_packages = packages
-        self.package_progress = {
-            package: 0 for package in packages
-        }
+        self.package_progress = {package: 0 for package in packages}
 
         self.retry_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
@@ -416,46 +371,25 @@ class SetupWindow(QDialog):
         for package in packages:
             key = self.package_to_key(package)
             if key:
-                self.set_row(
-                    key, "Queued", "↓", "#2979FF"
-                )
+                self.set_row(key, "Queued", "↓", "#2979FF")
 
-        self.status.setText("Preparing downloads...")
+        self.status.setText("Administrator permission required")
         self.detail.setText(
-            "Requesting administrator permission and updating "
-            "package information."
+            "A secure system authentication dialog will appear. "
+            "Enter your password there. PhoneView does not see, store, or log it."
         )
-        self.set_progress(
-            20, "Updating package lists..."
-        )
-        self.write_log(
-            "Automatic setup started."
-        )
-        self.write_log(
-            f"Using administrator authorization: {self.pkexec_path()}"
-        )
-        self.write_log(
-            "Requesting graphical system authorization (no Terminal window)."
-        )
+        self.set_progress(20, "Waiting for the system authorization dialog...")
+        self.write_log("Automatic setup started.")
+        self.write_log(f"Using administrator authorization: {self.pkexec_path()}")
+        self.write_log("Password security: authentication is handled by the operating system.")
+        self.write_log("Requesting graphical system authorization (no Terminal window).")
 
         self.process = QProcess(self)
-        self.process.setProcessChannelMode(
-            QProcess.MergedChannels
-        )
-        self.process.readyReadStandardOutput.connect(
-            self.read_output
-        )
-        self.process.finished.connect(
-            self.install_finished
-        )
-        self.process.errorOccurred.connect(
-            self.process_error
-        )
-        self.process.started.connect(
-            lambda: self.write_log(
-                "✓ System package installer process started."
-            )
-        )
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.read_output)
+        self.process.finished.connect(self.install_finished)
+        self.process.errorOccurred.connect(self.process_error)
+        self.process.started.connect(lambda: self.write_log("✓ System package installer process started."))
 
         self.process.start(
             self.pkexec_path(),
@@ -471,19 +405,12 @@ class SetupWindow(QDialog):
     def read_output(self):
         if not self.process:
             return
-
-        data = bytes(
-            self.process.readAllStandardOutput()
-        ).decode(errors="replace")
-
+        data = bytes(self.process.readAllStandardOutput()).decode(errors="replace")
         if not data:
             return
 
-        for raw_line in data.replace(
-            "\r", "\n"
-        ).splitlines():
+        for raw_line in data.replace("\r", "\n").splitlines():
             line = raw_line.strip()
-
             if not line:
                 continue
 
@@ -492,106 +419,64 @@ class SetupWindow(QDialog):
                 continue
 
             self.write_log(line)
-
             lower = line.lower()
 
             if "reading package lists" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 42),
-                    "Reading package lists..."
-                )
+                self.set_progress(max(self.progress.value(), 42), "Reading package lists...")
             elif "building dependency tree" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 48),
-                    "Building dependency tree..."
-                )
+                self.set_progress(max(self.progress.value(), 48), "Building dependency tree...")
             elif "building state information" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 52),
-                    "Building package state..."
-                )
+                self.set_progress(max(self.progress.value(), 52), "Building package state...")
             elif "download complete" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 65),
-                    "Downloads complete. Installing..."
-                )
+                self.set_progress(max(self.progress.value(), 65), "Downloads complete. Installing...")
             elif "unpacking" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 72),
-                    "Unpacking packages..."
-                )
+                self.set_progress(max(self.progress.value(), 72), "Unpacking packages...")
             elif "setting up" in lower:
-                self.set_progress(
-                    max(self.progress.value(), 84),
-                    "Configuring packages..."
-                )
+                self.set_progress(max(self.progress.value(), 84), "Configuring packages...")
 
     def parse_download_status(self, line):
-        match = re.search(
-            r"percent:(\d+(?:\.\d+)?)",
-            line
-        )
-
+        match = re.search(r"percent:(\d+(?:\.\d+)?)", line)
         if not match:
             return
-
         percent = float(match.group(1))
         overall = 20 + (percent * 0.48)
-
-        self.set_progress(
-            max(self.progress.value(), int(overall)),
-            f"Downloading packages... {percent:.0f}%"
-        )
+        self.set_progress(max(self.progress.value(), int(overall)), f"Downloading packages... {percent:.0f}%")
 
     def install_finished(self, exit_code, exit_status):
         self.read_output()
 
+        if self.cancelling:
+            return
+
         if exit_code != 0:
             self.fail_setup(
                 "Package list update failed.",
-                "The system package manager could not update "
-                "its package information.",
+                "The system package manager could not update its package information. "
+                "If authentication was cancelled, simply click Check again.",
                 exit_code,
             )
             return
 
-        self.write_log(
-            "✓ Package lists updated successfully."
-        )
+        self.write_log("✓ Package lists updated successfully.")
 
         packages = self.checker.missing_linux_packages()
-
         if not packages:
-            self.process = None
+            self.cleanup_process()
             self.run_check()
             return
 
         self.current_packages = packages
-        self.status.setText(
-            "Downloading and installing"
-        )
-        self.detail.setText(
-            "PhoneView is installing: "
-            + ", ".join(packages)
-        )
-        self.set_progress(
-            58,
-            "Downloading required packages..."
-        )
-        self.write_log(
-            "Installing: " + ", ".join(packages)
-        )
+        self.status.setText("Downloading and installing")
+        self.detail.setText("PhoneView is installing: " + ", ".join(packages))
+        self.set_progress(58, "Downloading required packages...")
+        self.write_log("Installing: " + ", ".join(packages))
 
         try:
-            self.process.finished.disconnect(
-                self.install_finished
-            )
+            self.process.finished.disconnect(self.install_finished)
         except (TypeError, RuntimeError):
             pass
 
-        self.process.finished.connect(
-            self.package_install_finished
-        )
+        self.process.finished.connect(self.package_install_finished)
 
         pkexec = self.pkexec_path()
         if not pkexec:
@@ -602,10 +487,7 @@ class SetupWindow(QDialog):
             )
             return
 
-        self.write_log(
-            f"Starting package installation with: {pkexec}"
-        )
-
+        self.write_log(f"Starting package installation with: {pkexec}")
         self.process.start(
             pkexec,
             [
@@ -618,66 +500,38 @@ class SetupWindow(QDialog):
             ] + packages,
         )
 
-    def package_install_finished(
-        self,
-        exit_code,
-        exit_status
-    ):
+    def package_install_finished(self, exit_code, exit_status):
         self.read_output()
+
+        if self.cancelling:
+            return
 
         if exit_code != 0:
             self.fail_setup(
                 "Installation failed.",
-                "One or more required components could not "
-                "be installed. The Activity log contains "
-                "the system error.",
+                "One or more required components could not be installed. "
+                "The Activity log contains the system error.",
                 exit_code,
             )
             return
 
-        self.process = None
         self.installing = False
+        self.set_progress(95, "Installation finished. Verifying...")
+        self.status.setText("Verifying installation")
+        self.detail.setText("Checking every component again before PhoneView starts.")
+        self.write_log("✓ Installation completed. Running final verification...")
 
-        self.set_progress(
-            95,
-            "Installation finished. Verifying..."
-        )
-        self.status.setText(
-            "Verifying installation"
-        )
-        self.detail.setText(
-            "Checking every component again before PhoneView starts."
-        )
-        self.write_log(
-            "✓ Installation completed. "
-            "Running final verification..."
-        )
-
-        QTimer.singleShot(
-            800,
-            self.run_check
-        )
+        self.cleanup_process()
+        QTimer.singleShot(800, self.run_check)
 
     def finish_success(self):
-        self.process = None
+        self.cleanup_process()
         self.installing = False
-
         self.status.setText("Everything is ready")
-        self.detail.setText(
-            "All required components are installed. "
-            "PhoneView can start now."
-        )
-        self.set_progress(
-            100,
-            "Setup completed successfully."
-        )
-
-        self.write_log(
-            "✓ All dependencies are ready."
-        )
-        self.write_log(
-            "✓ PhoneView is ready to start."
-        )
+        self.detail.setText("All required components are installed. PhoneView can start now.")
+        self.set_progress(100, "Setup completed successfully.")
+        self.write_log("✓ All dependencies are ready.")
+        self.write_log("✓ PhoneView is ready to start.")
 
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
@@ -685,32 +539,15 @@ class SetupWindow(QDialog):
 
         for item in self.checker.check():
             if item["ok"]:
-                self.set_row(
-                    item["id"],
-                    "Ready",
-                    "✓",
-                    "#4CAF50"
-                )
+                self.set_row(item["id"], "Ready", "✓", "#4CAF50")
 
-    def fail_setup(
-        self,
-        title,
-        detail,
-        exit_code
-    ):
-        self.process = None
+    def fail_setup(self, title, detail, exit_code):
         self.installing = False
-
         self.status.setText(title)
         self.detail.setText(detail)
-        self.set_progress(
-            max(15, self.progress.value()),
-            f"Operation failed (exit code {exit_code})."
-        )
-
-        self.write_log(
-            f"✗ Operation failed with exit code {exit_code}."
-        )
+        self.set_progress(max(15, self.progress.value()), f"Operation failed (exit code {exit_code}).")
+        self.write_log(f"✗ Operation failed with exit code {exit_code}.")
+        self.cleanup_process()
 
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(True)
@@ -718,30 +555,39 @@ class SetupWindow(QDialog):
 
         for package in self.current_packages:
             key = self.package_to_key(package)
-
             if key:
-                self.set_row(
-                    key,
-                    "Failed",
-                    "!",
-                    "#F44336"
-                )
+                self.set_row(key, "Failed", "!", "#F44336")
 
     def process_error(self, error):
-        self.write_log(
-            f"✗ Installer error: {error}"
-        )
-        self.status.setText(
-            "Installer could not start"
-        )
-        self.detail.setText(
-            "PhoneView could not start the system package installer."
-        )
+        if self.cancelling:
+            return
 
-        self.process = None
+        self.write_log(f"✗ Installer error: {error}")
+        self.status.setText("Installer could not start")
+        self.detail.setText(
+            "PhoneView could not start the system package installer. "
+            "Make sure a graphical system authentication agent is available."
+        )
         self.installing = False
+        self.cleanup_process()
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(True)
+
+    def cleanup_process(self):
+        process = self.process
+        self.process = None
+        if process is None:
+            return
+
+        try:
+            process.readyReadStandardOutput.disconnect(self.read_output)
+        except (TypeError, RuntimeError):
+            pass
+        try:
+            process.errorOccurred.disconnect(self.process_error)
+        except (TypeError, RuntimeError):
+            pass
+        process.deleteLater()
 
     def package_to_key(self, package):
         return {
@@ -751,11 +597,8 @@ class SetupWindow(QDialog):
         }.get(package)
 
     def pkexec_path(self):
-        """Return pkexec even when a desktop-launched PATH is incomplete."""
         if not sys.platform.startswith("linux"):
             return None
-
-        import os
 
         if self.checker.command_exists("pkexec"):
             return "pkexec"
@@ -769,10 +612,9 @@ class SetupWindow(QDialog):
     def manual_install_message(self):
         if sys.platform.startswith("linux"):
             return (
-                "Automatic installation requires pkexec (the system "
-                "authorization helper). It is not available on this "
-                "system. Install it once with: sudo apt install policykit-1. "
-                "Then click Check again."
+                "Automatic installation requires pkexec (the system authorization helper). "
+                "It is not available on this system. Install it once with: "
+                "sudo apt install policykit-1. Then click Check again."
             )
 
         if sys.platform == "darwin":
@@ -788,18 +630,30 @@ class SetupWindow(QDialog):
 
     def cancel_setup(self):
         if self.process is not None:
-            self.write_log(
-                "Cancelling current installation..."
-            )
-            self.process.kill()
+            self.cancelling = True
+            self.write_log("Cancelling current installation...")
+            process = self.process
             self.process = None
+
+            try:
+                if process.state() != QProcess.NotRunning:
+                    process.terminate()
+                    if not process.waitForFinished(2500):
+                        process.kill()
+                        process.waitForFinished(1000)
+            except RuntimeError:
+                pass
+
+            process.deleteLater()
 
         self.installing = False
         self.reject()
 
     def closeEvent(self, event):
-        if self.process is not None:
-            self.process.kill()
-            self.process = None
+        if self.process is not None and self.process.state() != QProcess.NotRunning:
+            self.write_log("Installation is still running. Cancel the installation first.")
+            event.ignore()
+            return
 
+        self.cleanup_process()
         event.accept()
