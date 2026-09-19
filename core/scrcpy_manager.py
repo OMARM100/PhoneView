@@ -179,11 +179,6 @@ class ScrcpyManager:
                 "No graphical display session was found. Start PhoneView from the desktop session."
             )
 
-        # PhoneView embeds the native scrcpy window. On Linux/Wayland, use
-        # XWayland when available so Qt can attach the X11 child window.
-        # This avoids opening a second visible scrcpy window outside PhoneView.
-        if os.name != "nt" and env.get("DISPLAY"):
-            env["SDL_VIDEODRIVER"] = "x11"
 
         self._open_log()
 
@@ -244,6 +239,29 @@ class ScrcpyManager:
 
         self._cleanup_log()
 
+
+    def focus_window(self, title):
+        """Best-effort focus for the separate native scrcpy window."""
+        if not title:
+            return False
+        if os.name == "nt":
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.FindWindowW(None, title)
+                if hwnd:
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    return True
+            except Exception:
+                return False
+        if os.name != "nt":
+            for command in (["wmctrl", "-a", title], ["xdotool", "search", "--name", title, "windowactivate"]):
+                try:
+                    result = subprocess.run(command, capture_output=True, timeout=2)
+                    if result.returncode == 0:
+                        return True
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        return False
 
     def adb_keyevent(self, serial, keycode):
         if not serial:
