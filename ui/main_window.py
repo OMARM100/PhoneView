@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
@@ -875,17 +876,26 @@ class MainWindow(QMainWindow):
         )
 
     def _find_scrcpy_window_id(self):
-        try:
-            result = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True, timeout=2)
-            if result.returncode != 0 or " = " not in result.stdout:
+        """Find the scrcpy native window using a platform-specific host-window backend."""
+        if sys.platform.startswith("linux"):
+            try:
+                result = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True, timeout=2)
+                if result.returncode != 0 or " = " not in result.stdout:
+                    return None
+                raw = result.stdout.split(" = ", 1)[1].strip()
+                for window_id in [x.strip() for x in raw.split(",") if x.strip()]:
+                    result = subprocess.run(["xprop", "-id", window_id, "_NET_WM_NAME", "WM_NAME"], capture_output=True, text=True, timeout=1)
+                    if self.project_name in result.stdout:
+                        return int(window_id, 16)
+            except (OSError, ValueError, subprocess.SubprocessError):
                 return None
-            raw = result.stdout.split(" = ", 1)[1].strip()
-            for window_id in [x.strip() for x in raw.split(",") if x.strip()]:
-                result = subprocess.run(["xprop", "-id", window_id, "_NET_WM_NAME", "WM_NAME"], capture_output=True, text=True, timeout=1)
-                if self.project_name in result.stdout:
-                    return int(window_id, 16)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return None
+        elif sys.platform == "win32":
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.FindWindowW(None, self.project_name)
+                return int(hwnd) if hwnd else None
+            except Exception:
+                return None
         return None
 
     def try_embed_scrcpy(self):
@@ -894,12 +904,17 @@ class MainWindow(QMainWindow):
         window_id = self._find_scrcpy_window_id()
         if window_id is None:
             self.embed_attempts += 1
-            if self.embed_attempts < 30:
+            if self.embed_attempts < 40:
                 self.embed_timer.start(150)
                 return
-            self.control_state.setText("External window\nmode")
-            self.mirror_placeholder.setText("▯\n\nEMBEDDING UNAVAILABLE\n\nscrcpy is still running in its own window.")
-            self.write_log("! Could not find the scrcpy X11 window; keeping external scrcpy mode.")
+            self.control_state.setText("Embedding unavailable")
+            self.mirror_placeholder.setText("▯\\n\\nEMBEDDING UNAVAILABLE\\n\\nPhoneView could not attach the scrcpy window to its own interface.")
+            self.stream_state.setText("●  EMBEDDING FAILED")
+            self.stream_state.setObjectName("StatusBad")
+            self.write_log("✗ Native embedding backend could not find the scrcpy window.")
+            self.scrcpy.stop()
+            self.connected_serial = None
+            self.update_buttons()
             return
         try:
             foreign = QWindow.fromWinId(window_id)
@@ -907,6 +922,7 @@ class MainWindow(QMainWindow):
             self.scrcpy_window_id = window_id
             container = QWidget.createWindowContainer(foreign, self.mirror_host)
             container.setFocusPolicy(Qt.StrongFocus)
+            container.setObjectName("ScrcpyContainer")
             self.scrcpy_container = container
             layout = self.mirror_host.layout()
             layout.removeWidget(self.mirror_placeholder)
@@ -914,7 +930,7 @@ class MainWindow(QMainWindow):
             layout.addWidget(container)
             self.stream_state.setText("●  SCREEN LIVE")
             self.stream_state.setObjectName("StatusGood")
-            self.control_state.setText("Embedded\nmouse + keyboard")
+            self.control_state.setText("Embedded\\nmouse + keyboard")
             self.write_log("✓ Android screen embedded inside PhoneView.")
             self.write_log("✓ Mouse and keyboard input are forwarded by scrcpy.")
             self.rebuild_controls()
@@ -922,7 +938,7 @@ class MainWindow(QMainWindow):
             self.focus_scrcpy()
         except Exception as exc:
             self.write_log(f"! Embedded mode failed: {exc}")
-            self.control_state.setText("External window\nmode")
+            self.embed_attempts += 1
             self.embed_timer.start(250)
 
     def focus_scrcpy(self):
@@ -948,6 +964,12 @@ class MainWindow(QMainWindow):
             self.write_log("✗ scrcpy screen window closed or stopped.")
             if self.scrcpy.last_output:
                 self.write_log(self.scrcpy.last_output[-2500:])
+            if self.scrcpy_container:
+                self.scrcpy_container.setParent(None)
+                self.scrcpy_container.deleteLater()
+                self.scrcpy_container = None
+            self.scrcpy_window = None
+            self.scrcpy_window_id = None
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
@@ -958,6 +980,12 @@ class MainWindow(QMainWindow):
             self.update_buttons()
 
     def disconnect(self):
+        if self.scrcpy_container:
+            self.scrcpy_container.setParent(None)
+            self.scrcpy_container.deleteLater()
+            self.scrcpy_container = None
+        self.scrcpy_window = None
+        self.scrcpy_window_id = None
         self.scrcpy.stop()
         self.connected_serial = None
         self.progress.setVisible(False)
