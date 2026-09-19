@@ -463,6 +463,10 @@ class MainWindow(QMainWindow):
         self.control_panel_layout.addWidget(focus)
 
         stage_l.addWidget(controls)
+        self.mapping_editor = MappingEditor()
+        self.mapping_editor.set_mappings(self.custom_controls)
+        self.mapping_editor.hide()
+        mirror_l.addWidget(self.mapping_editor, 1)
         self.rebuild_controls()
         hero_l.addWidget(stage, 1)
 
@@ -699,7 +703,7 @@ class MainWindow(QMainWindow):
         serial = device.serial
         self.connect_button.setEnabled(False)
         self.progress.setVisible(True)
-        self.mirror_placeholder.setText("▯\n\nSTARTING SCREEN...\n\nLaunching scrcpy…")
+        self.mirror_placeholder.setText("OPENING ANDROID SCREEN...\n\nThe scrcpy window will stay separate.")
         self.stream_state.setText("●  CONNECTING")
         self.stream_state.setObjectName("StatusWarn")
         self.header_state.setText("●  CONNECTING")
@@ -962,36 +966,26 @@ class MainWindow(QMainWindow):
             self.write_log("✗ scrcpy screen window closed or stopped.")
             if self.scrcpy.last_output:
                 self.write_log(self.scrcpy.last_output[-2500:])
-            if self.scrcpy_container:
-                self.scrcpy_container.setParent(None)
-                self.scrcpy_container.deleteLater()
-                self.scrcpy_container = None
-            self.scrcpy_window = None
-            self.scrcpy_window_id = None
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
             self.mirror_placeholder.show()
-            self.mirror_placeholder.setText("▯\n\nSCREEN STOPPED\n\nConnect & View to start again.")
-            self.control_state.setText("Embedded\ninput ready")
+            self.mapping_editor.hide()
+            self.mirror_placeholder.setText("MAPPING EDITOR\n\nAndroid screen stopped. Connect & View to start again.")
+            self.control_state.setText("Editor mode\nScrcpy stays separate")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
 
     def disconnect(self):
-        if self.scrcpy_container:
-            self.scrcpy_container.setParent(None)
-            self.scrcpy_container.deleteLater()
-            self.scrcpy_container = None
-        self.scrcpy_window = None
-        self.scrcpy_window_id = None
         self.scrcpy.stop()
         self.connected_serial = None
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
         self.mirror_placeholder.show()
-        self.mirror_placeholder.setText("▯\n\nPHONE SCREEN\n\nConnect & View to start")
-        self.control_state.setText("Embedded\ninput ready")
+        self.mirror_placeholder.setText("MAPPING EDITOR\n\nConnect & View to open the separate Android screen.")
+        self.mapping_editor.hide()
+        self.control_state.setText("Editor mode\nScrcpy stays separate")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
         self.update_buttons()
