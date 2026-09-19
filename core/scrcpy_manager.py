@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 
+
 class ScrcpyManager:
     def __init__(self):
         self.process = None
@@ -12,6 +13,7 @@ class ScrcpyManager:
         exe = shutil.which("scrcpy")
         if exe:
             return exe
+
         if os.name == "nt":
             candidates = [
                 os.path.expandvars(r"%ProgramFiles%\scrcpy\scrcpy.exe"),
@@ -23,37 +25,91 @@ class ScrcpyManager:
                 "/usr/local/bin/scrcpy",
                 os.path.expanduser("~/bin/scrcpy"),
             ]
+
         for path in candidates:
-            if os.path.isfile(path):
+            if os.path.isfile(path) and os.access(path, os.X_OK):
                 return path
         return None
 
     def available(self):
         return bool(self.scrcpy)
 
+    def running(self):
+        return self.process is not None and self.process.poll() is None
+
     def start(self, serial):
         self.stop()
+
         if not self.scrcpy:
-            raise RuntimeError("scrcpy غير موجود. ثبّت scrcpy ثم أعد المحاولة.")
+            raise RuntimeError(
+                "scrcpy is not installed or not available in PATH."
+            )
+
         cmd = [
-            self.scrcpy, "--serial", serial,
+            self.scrcpy,
+            "--serial", serial,
             "--window-title", "PhoneView - Android",
-            "--stay-awake", "--no-audio",
-            "--max-size", "1280", "--video-bit-rate", "8M"
+            "--no-audio",
+            "--stay-awake",
+            "--max-size", "1280",
+            "--video-bit-rate", "8M",
         ]
-        self.process = subprocess.Popen(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
+
+        try:
+            self.process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+        except OSError as exc:
+            self.process = None
+            raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
+
+        # scrcpy exits immediately when ADB/device access fails.
+        try:
+            code = self.process.wait(timeout=0.35)
+        except subprocess.TimeoutExpired:
+            return
+
+        output = ""
+        try:
+            output = self.process.stdout.read().strip() if self.process.stdout else ""
+        except Exception:
+            pass
+
+        self.process = None
+        detail = output[-1200:] if output else f"scrcpy exited with code {code}."
+        raise RuntimeError(detail)
+
+    def read_output(self):
+        if not self.process or not self.process.stdout:
+            return ""
+        try:
+            return self.process.stdout.read()
+        except Exception:
+            return ""
 
     def stop(self):
-        if self.process is not None:
-            if self.process.poll() is None:
+        process = self.process
+        self.process = None
+
+        if process is None:
+            return
+
+        if process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=2)
+            except Exception:
                 try:
-                    self.process.terminate()
-                    self.process.wait(timeout=2)
+                    process.kill()
                 except Exception:
-                    try:
-                        self.process.kill()
-                    except Exception:
-                        pass
-            self.process = None
+                    pass
+
+        try:
+            if process.stdout:
+                process.stdout.close()
+        except Exception:
+            pass
