@@ -435,7 +435,7 @@ class SetupWindow(QDialog):
             f"Using administrator authorization: {self.pkexec_path()}"
         )
         self.write_log(
-            "A system permission dialog may appear now."
+            "Requesting graphical system authorization (no Terminal window)."
         )
 
         self.process = QProcess(self)
@@ -460,6 +460,7 @@ class SetupWindow(QDialog):
         self.process.start(
             self.pkexec_path(),
             [
+                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
@@ -608,6 +609,7 @@ class SetupWindow(QDialog):
         self.process.start(
             pkexec,
             [
+                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
