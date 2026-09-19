@@ -1,5 +1,8 @@
+import os
+import subprocess
+
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QWindow
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -18,7 +21,6 @@ from PySide6.QtWidgets import (
 
 from core.adb_manager import ADBManager
 from core.scrcpy_manager import ScrcpyManager
-from ui.button_manager import ButtonManagerDialog
 
 
 QSS = """
@@ -174,12 +176,12 @@ class MainWindow(QMainWindow):
         self.connected_serial = None
         self.refresh_in_progress = False
         self.project_name = "Android Project"
-        self.button_manager = None
+        self.scrcpy_window = None
+        self.scrcpy_container = None
+        self.scrcpy_window_id = None
+        self.embed_attempts = 0
 
         self.build_ui()
-
-        self.button_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
-        self.button_shortcut.activated.connect(self.open_button_manager)
 
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.refresh_devices)
@@ -231,10 +233,6 @@ class MainWindow(QMainWindow):
         self.refresh_button.clicked.connect(self.refresh_devices)
         hl.addWidget(self.refresh_button)
 
-        self.buttons_button = QPushButton("⌘  Buttons")
-        self.buttons_button.setToolTip("Open Button Manager (Ctrl+B)")
-        self.buttons_button.clicked.connect(self.open_button_manager)
-        hl.addWidget(self.buttons_button)
         main.addWidget(header)
 
         content = QHBoxLayout()
@@ -401,14 +399,6 @@ class MainWindow(QMainWindow):
     def set_project_name(self, name):
         clean = " ".join(name.split()).strip()
         self.project_name = clean[:80] or "Android Project"
-
-    def open_button_manager(self):
-        if self.button_manager is None:
-            self.button_manager = ButtonManagerDialog(self)
-        self.button_manager.show()
-        self.button_manager.raise_()
-        self.button_manager.activateWindow()
-        self.write_log("Button Manager opened (Ctrl+B).")
 
     def write_log(self, message):
         self.log.append(message)
