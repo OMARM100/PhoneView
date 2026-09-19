@@ -34,6 +34,20 @@ class ScrcpyManager:
     def available(self):
         return bool(self.scrcpy)
 
+    def version(self):
+        if not self.scrcpy:
+            return ""
+        try:
+            result = subprocess.run(
+                [self.scrcpy, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            return (result.stdout or result.stderr).splitlines()[0].strip()
+        except Exception:
+            return ""
+
     def running(self):
         return self.process is not None and self.process.poll() is None
 
@@ -41,15 +55,15 @@ class ScrcpyManager:
         self.stop()
 
         if not self.scrcpy:
-            raise RuntimeError(
-                "scrcpy is not installed or not available in PATH."
-            )
+            raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
+        # scrcpy 1.x (including Ubuntu 22.04's 1.25) does not support
+        # --no-audio. Audio forwarding was added in later scrcpy releases,
+        # so simply omit the audio option for compatibility.
         cmd = [
             self.scrcpy,
             "--serial", serial,
             "--window-title", "PhoneView - Android",
-            "--no-audio",
             "--stay-awake",
             "--max-size", "1280",
             "--video-bit-rate", "8M",
@@ -67,9 +81,8 @@ class ScrcpyManager:
             self.process = None
             raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
 
-        # scrcpy exits immediately when ADB/device access fails.
         try:
-            code = self.process.wait(timeout=0.35)
+            self.process.wait(timeout=0.45)
         except subprocess.TimeoutExpired:
             return
 
@@ -79,8 +92,9 @@ class ScrcpyManager:
         except Exception:
             pass
 
+        code = self.process.returncode
         self.process = None
-        detail = output[-1200:] if output else f"scrcpy exited with code {code}."
+        detail = output[-1600:] if output else f"scrcpy exited with code {code}."
         raise RuntimeError(detail)
 
     def read_output(self):
