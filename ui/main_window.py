@@ -1,4 +1,5 @@
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from core.adb_manager import ADBManager
 from core.scrcpy_manager import ScrcpyManager
+from ui.button_manager import ButtonManagerDialog
 
 
 QSS = """
@@ -170,8 +172,13 @@ class MainWindow(QMainWindow):
         self.devices = []
         self.connected_serial = None
         self.refresh_in_progress = False
+        self.project_name = "Android Project"
+        self.button_manager = None
 
         self.build_ui()
+
+        self.button_shortcut = QShortcut(QKeySequence("Ctrl+B"), self)
+        self.button_shortcut.activated.connect(self.open_button_manager)
 
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.refresh_devices)
@@ -212,9 +219,18 @@ class MainWindow(QMainWindow):
         self.header_state.setObjectName("StatusWarn")
         hl.addWidget(self.header_state)
 
+        self.project_label = QLabel("PROJECT  •  Android Project")
+        self.project_label.setObjectName("Muted")
+        hl.addWidget(self.project_label)
+
         self.refresh_button = QPushButton("↻  Refresh")
         self.refresh_button.clicked.connect(self.refresh_devices)
         hl.addWidget(self.refresh_button)
+
+        self.buttons_button = QPushButton("⌘  Buttons")
+        self.buttons_button.setToolTip("Open Button Manager (Ctrl+B)")
+        self.buttons_button.clicked.connect(self.open_button_manager)
+        hl.addWidget(self.buttons_button)
         main.addWidget(header)
 
         content = QHBoxLayout()
@@ -377,6 +393,14 @@ class MainWindow(QMainWindow):
             self.write_log("! Update scrcpy before starting screen mirroring.")
         self.engine_text.setText(self.scrcpy.version() or "scrcpy not detected")
         self.update_buttons()
+
+    def open_button_manager(self):
+        if self.button_manager is None:
+            self.button_manager = ButtonManagerDialog(self)
+        self.button_manager.show()
+        self.button_manager.raise_()
+        self.button_manager.activateWindow()
+        self.write_log("Button Manager opened (Ctrl+B).")
 
     def write_log(self, message):
         self.log.append(message)
@@ -547,6 +571,16 @@ class MainWindow(QMainWindow):
                 f"Android: {android}\nSDK: {sdk}\nSerial: {serial}"
             )
 
+            # Use the project name as the external Android mirror window title.
+            original_build = self.scrcpy._build_command
+            def project_build(selected_serial):
+                command = original_build(selected_serial)
+                if "--window-title" in command:
+                    index = command.index("--window-title")
+                    if index + 1 < len(command):
+                        command[index + 1] = self.project_name
+                return command
+            self.scrcpy._build_command = project_build
             self.scrcpy.start(serial)
 
             if not self.scrcpy.running():
