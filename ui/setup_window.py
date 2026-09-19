@@ -416,8 +416,19 @@ class SetupWindow(QDialog):
             "The system authentication dialog should appear now. "
             "Enter your password only in that system dialog."
         )
-        self.set_progress(20, "Waiting for the system authorization dialog...")
+        self.set_progress(20, "Preparing the graphical system authorization agent...")
         self.log_desktop_session()
+
+        if not self.ensure_graphical_auth_agent():
+            self.fail_setup(
+                "No graphical Polkit authentication agent found.",
+                "This Xfce session does not currently have a graphical Polkit authentication agent. "
+                "PhoneView will not collect your password or fall back to a Terminal prompt. "
+                "Install a graphical Polkit agent once, then click Check again.",
+                127,
+            )
+            return
+
         self.write_log("Delegating authentication directly to the system Polkit agent.")
         self.write_log(
             "No password is requested, read, stored, or handled by PhoneView."
@@ -662,6 +673,99 @@ class SetupWindow(QDialog):
         if sys.platform == "darwin":
             return "Automatic macOS installation will be added later. Install ADB and scrcpy, then click Check again."
         return "Automatic Windows installation will be added later. Install ADB and scrcpy, then click Check again."
+
+    def find_graphical_auth_agent(self):
+        """Return a known graphical Polkit agent executable, if installed."""
+        candidates = [
+            "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
+            "/usr/libexec/polkit-gnome-authentication-agent-1",
+            "/usr/libexec/polkit-mate-authentication-agent-1",
+            "/usr/libexec/xfce-polkit",
+            "/usr/bin/lxpolkit",
+            "/usr/bin/mate-polkit",
+            "/usr/bin/xfce-polkit",
+        ]
+
+        for path in candidates:
+            if os.path.isfile(path) and os.access(path, os.X_OK):
+                return path
+
+        for command in (
+            "polkit-gnome-authentication-agent-1",
+            "polkit-mate-authentication-agent-1",
+            "xfce-polkit",
+            "lxpolkit",
+            "mate-polkit",
+        ):
+            found = shutil.which(command)
+            if found:
+                return found
+
+        return None
+
+    def graphical_auth_agent_running(self):
+        """Check whether a known graphical Polkit agent is already running."""
+        process_names = (
+            "polkit-gnome-authentication-agent-1",
+            "polkit-mate-authentication-agent-1",
+            "xfce-polkit",
+            "lxpolkit",
+            "mate-polkit",
+        )
+
+        try:
+            result = subprocess.run(
+                ["ps", "-u", str(os.getuid()), "-o", "comm="],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            running = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+            return any(name in running for name in process_names)
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def ensure_graphical_auth_agent(self):
+        """
+        Make sure the current desktop session has a graphical Polkit agent.
+
+        PhoneView never implements authentication itself. If a supported agent is
+        installed but its desktop autostart entry did not run, PhoneView may
+        launch that agent so Polkit can display its normal system dialog.
+        """
+        if self.graphical_auth_agent_running():
+            self.write_log("✓ Graphical Polkit authentication agent is already running.")
+            return True
+
+        agent = self.find_graphical_auth_agent()
+        if not agent:
+            self.write_log("✗ No installed graphical Polkit authentication agent was found.")
+            return False
+
+        self.write_log(f"Starting installed graphical Polkit agent: {agent}")
+
+        try:
+            process = QProcess(self)
+            process.setProcessChannelMode(QProcess.MergedChannels)
+            process.start(agent, [])
+
+            if not process.waitForStarted(2500):
+                self.write_log("✗ Graphical Polkit agent could not be started.")
+                process.deleteLater()
+                return False
+
+            self.auth_agent_process = process
+            self.auth_agent_started_by_us = True
+
+            # Give the agent a moment to register itself with the current
+            # session bus before pkexec sends its authorization request.
+            QTimer.singleShot(400, lambda: None)
+
+            self.write_log("✓ Graphical Polkit agent started.")
+            return True
+        except (OSError, RuntimeError) as exc:
+            self.write_log(f"✗ Could not start graphical Polkit agent: {exc}")
+            return False
 
     def stop_auth_agent(self):
         process = self.auth_agent_process
