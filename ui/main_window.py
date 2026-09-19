@@ -220,6 +220,10 @@ class MainWindow(QMainWindow):
         self.stream_timer.timeout.connect(self.check_stream)
         self.stream_timer.start(500)
 
+        self.embed_timer = QTimer(self)
+        self.embed_timer.setSingleShot(True)
+        self.embed_timer.timeout.connect(self.try_embed_scrcpy)
+
         QTimer.singleShot(120, self.refresh_devices)
 
     def build_ui(self):
@@ -644,8 +648,10 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN STREAMING")
             self.stream_state.setObjectName("StatusGood")
-            self.stage_state.setText("SCREEN IS LIVE")
-            self.stage_hint.setText("The Android screen is open in the scrcpy window.")
+            self.mirror_placeholder.setText("▯\n\nFINDING MIRROR WINDOW…")
+            self.control_state.setText("Waiting for\nscrcpy window")
+            self.embed_attempts = 0
+            self.embed_timer.start(100)
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
@@ -654,14 +660,80 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN UNAVAILABLE")
             self.stream_state.setObjectName("StatusBad")
-            self.stage_state.setText("MIRROR FAILED")
-            self.stage_hint.setText("The exact scrcpy error has been added to Live activity.")
+            self.mirror_placeholder.setText("▯\n\nMIRROR FAILED\n\nSee Live activity.")
             self.header_state.setText("●  CONNECTION ERROR")
             self.write_log(f"✗ Connection failed: {exc}")
             QMessageBox.critical(self, "PhoneView", f"scrcpy could not start:\n\n{exc}")
         finally:
             self.update_buttons()
 
+    def _find_scrcpy_window_id(self):
+        try:
+            result = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True, timeout=2)
+            if result.returncode != 0 or " = " not in result.stdout:
+                return None
+            raw = result.stdout.split(" = ", 1)[1].strip()
+            for window_id in [x.strip() for x in raw.split(",") if x.strip()]:
+                result = subprocess.run(["xprop", "-id", window_id, "_NET_WM_NAME", "WM_NAME"], capture_output=True, text=True, timeout=1)
+                if self.project_name in result.stdout:
+                    return int(window_id, 16)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+        return None
+
+    def try_embed_scrcpy(self):
+        if not self.scrcpy.running() or not self.connected_serial:
+            return
+        window_id = self._find_scrcpy_window_id()
+        if window_id is None:
+            self.embed_attempts += 1
+            if self.embed_attempts < 30:
+                self.embed_timer.start(150)
+                return
+            self.control_state.setText("External window\nmode")
+            self.mirror_placeholder.setText("▯\n\nEMBEDDING UNAVAILABLE\n\nscrcpy is still running in its own window.")
+            self.write_log("! Could not find the scrcpy X11 window; keeping external scrcpy mode.")
+            return
+        try:
+            foreign = QWindow.fromWinId(window_id)
+            self.scrcpy_window = foreign
+            self.scrcpy_window_id = window_id
+            container = QWidget.createWindowContainer(foreign, self.mirror_host)
+            container.setFocusPolicy(Qt.StrongFocus)
+            self.scrcpy_container = container
+            layout = self.mirror_host.layout()
+            layout.removeWidget(self.mirror_placeholder)
+            self.mirror_placeholder.hide()
+            layout.addWidget(container)
+            self.stream_state.setText("●  SCREEN LIVE")
+            self.stream_state.setObjectName("StatusGood")
+            self.control_state.setText("Embedded\nmouse + keyboard")
+            self.write_log("✓ Android screen embedded inside PhoneView.")
+            self.write_log("✓ Mouse and keyboard input are forwarded by scrcpy.")
+            self.update_buttons()
+            self.focus_scrcpy()
+        except Exception as exc:
+            self.write_log(f"! Embedded mode failed: {exc}")
+            self.control_state.setText("External window\nmode")
+            self.embed_timer.start(250)
+
+    def focus_scrcpy(self):
+        if self.scrcpy_window:
+            self.scrcpy_window.requestActivate()
+            self.scrcpy_window.setFocus()
+        elif self.scrcpy_container:
+            self.scrcpy_container.setFocus()
+
+    def send_key(self, keycode, label):
+        serial = self.connected_serial or (self.current_device().serial if self.current_device() else None)
+        if not serial or not self.scrcpy.running():
+            return
+        try:
+            self.scrcpy.adb_keyevent(serial, keycode)
+            self.write_log(f"✓ {label} sent to Android.")
+            self.focus_scrcpy()
+        except Exception as exc:
+            self.write_log(f"✗ {label}: {exc}")
     def check_stream(self):
         if self.connected_serial and not self.scrcpy.running():
             self.scrcpy.read_output()
@@ -671,8 +743,9 @@ class MainWindow(QMainWindow):
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
-            self.stage_state.setText("SCREEN STOPPED")
-            self.stage_hint.setText("The mirror process ended. Check Live activity for the exact error.")
+            self.mirror_placeholder.show()
+            self.mirror_placeholder.setText("▯\n\nSCREEN STOPPED\n\nConnect & View to start again.")
+            self.control_state.setText("Embedded\ninput ready")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
 
@@ -682,8 +755,9 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
-        self.stage_state.setText("PHONE MIRROR READY")
-        self.stage_hint.setText("The Android mirror opens in the scrcpy window.")
+        self.mirror_placeholder.show()
+        self.mirror_placeholder.setText("▯\n\nPHONE SCREEN\n\nConnect & View to start")
+        self.control_state.setText("Embedded\ninput ready")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
         self.update_buttons()
