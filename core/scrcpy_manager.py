@@ -1,17 +1,19 @@
 import os
 import shutil
 import subprocess
-import sys
+import tempfile
 
 
 class ScrcpyManager:
-    """Launch and monitor scrcpy across desktop platforms."""
+    """Launch and monitor scrcpy without blocking its output pipe."""
 
     def __init__(self):
         self.process = None
         self.scrcpy = self._find_scrcpy()
         self._help_text = None
         self.last_output = ""
+        self._log_file = None
+        self._log_path = None
 
     @staticmethod
     def _find_scrcpy():
@@ -45,14 +47,9 @@ class ScrcpyManager:
         if not self.scrcpy:
             return ""
         try:
-            result = subprocess.run(
-                [self.scrcpy, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            text = (result.stdout or result.stderr or "").strip()
-            return text.splitlines()[0] if text else ""
+            result = subprocess.run([self.scrcpy, "--version"], capture_output=True, text=True, timeout=3)
+            output = (result.stdout or result.stderr or "").strip()
+            return output.splitlines()[0] if output else ""
         except Exception:
             return ""
 
@@ -61,14 +58,9 @@ class ScrcpyManager:
             return self._help_text
         if not self.scrcpy:
             self._help_text = ""
-            return self._help_text
+            return ""
         try:
-            result = subprocess.run(
-                [self.scrcpy, "--help"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
+            result = subprocess.run([self.scrcpy, "--help"], capture_output=True, text=True, timeout=3)
             self._help_text = (result.stdout or "") + "\n" + (result.stderr or "")
         except Exception:
             self._help_text = ""
@@ -78,26 +70,52 @@ class ScrcpyManager:
         return option in self._help()
 
     def _build_command(self, serial):
-        # Start with options known to work on scrcpy 1.25.
-        cmd = [self.scrcpy, "-s", serial]
+        cmd = [self.scrcpy, "-s", serial, "--window-title", "PhoneView - Android"]
 
         if self._supports("--stay-awake"):
             cmd.append("--stay-awake")
-
-        if self._supports("--window-title"):
-            cmd += ["--window-title", "PhoneView - Android"]
-
-        # Keep the mirror window visible when PhoneView starts it.
+        if self._supports("--window-width"):
+            cmd += ["--window-width", "420"]
+        if self._supports("--window-height"):
+            cmd += ["--window-height", "700"]
         if self._supports("--always-on-top"):
             cmd.append("--always-on-top")
-
-        if self._supports("--window-width") and self._supports("--window-height"):
-            cmd += ["--window-width", "420", "--window-height", "700"]
 
         return cmd
 
     def running(self):
         return self.process is not None and self.process.poll() is None
+
+    def _open_log(self):
+        self._cleanup_log()
+        self._log_file = tempfile.NamedTemporaryFile(
+            mode="w+", encoding="utf-8", prefix="phoneview_scrcpy_", suffix=".log", delete=False
+        )
+        self._log_path = self._log_file.name
+
+    def _read_log(self):
+        if not self._log_path:
+            return ""
+        try:
+            with open(self._log_path, "r", encoding="utf-8", errors="replace") as fh:
+                return fh.read().strip()
+        except Exception:
+            return ""
+
+    def _cleanup_log(self):
+        if self._log_file:
+            try:
+                self._log_file.close()
+            except Exception:
+                pass
+        self._log_file = None
+
+        if self._log_path:
+            try:
+                os.remove(self._log_path)
+            except OSError:
+                pass
+        self._log_path = None
 
     def start(self, serial):
         self.stop()
@@ -108,82 +126,59 @@ class ScrcpyManager:
 
         env = os.environ.copy()
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
-            raise RuntimeError(
-                "No graphical display session was found. Start PhoneView from your desktop session."
-            )
+            raise RuntimeError("No graphical display session was found. Start PhoneView from your desktop session.")
 
-        cmd = self._build_command(serial)
+        self._open_log()
 
         try:
             self.process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
+                self._build_command(serial),
+                stdout=self._log_file,
                 stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
                 env=env,
                 start_new_session=(os.name != "nt"),
-                creationflags=(
-                    subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-                ),
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
             )
         except OSError as exc:
             self.process = None
+            self.last_output = str(exc)
+            self._cleanup_log()
             raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
 
-        # scrcpy creates its SDL window asynchronously. Wait only for an
-        # immediate startup failure; do not block until the mirror closes.
         try:
-            self.process.wait(timeout=1.0)
+            self.process.wait(timeout=1.2)
         except subprocess.TimeoutExpired:
             return True
 
-        self._collect_output()
+        self.last_output = self._read_log()
         code = self.process.returncode
         self.process = None
-        detail = self.last_output[-3000:] if self.last_output else f"scrcpy exited with code {code}."
-        raise RuntimeError(detail)
-
-    def _collect_output(self):
-        if not self.process or not self.process.stdout:
-            return
-        try:
-            data = self.process.stdout.read()
-            if data:
-                self.last_output = data.strip()
-        except Exception:
-            pass
+        self._cleanup_log()
+        raise RuntimeError(self.last_output[-4000:] if self.last_output else f"scrcpy exited immediately with code {code}.")
 
     def read_output(self):
-        if not self.process or not self.process.stdout:
-            return ""
-        try:
-            data = self.process.stdout.read()
-            if data:
-                self.last_output = data.strip()
-            return data
-        except Exception:
-            return ""
+        output = self._read_log()
+        if output:
+            self.last_output = output
+        return output
 
     def stop(self):
         process = self.process
         self.process = None
 
-        if process is None:
-            return
-
-        if process.poll() is None:
+        if process is not None and process.poll() is None:
             try:
                 process.terminate()
                 process.wait(timeout=2)
             except Exception:
                 try:
                     process.kill()
+                    process.wait(timeout=1)
                 except Exception:
                     pass
 
-        try:
-            if process.stdout:
-                process.stdout.close()
-        except Exception:
-            pass
+        output = self._read_log()
+        if output:
+            self.last_output = output
+
+        self._cleanup_log()
