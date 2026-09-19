@@ -1,72 +1,113 @@
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMainWindow,
-    QMessageBox, QPushButton, QProgressBar, QSplitter, QTextEdit, QVBoxLayout, QWidget
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
 from core.adb_manager import ADBManager
 from core.scrcpy_manager import ScrcpyManager
 
 
-MAIN_QSS = """
+QSS = """
 QMainWindow, QWidget {
-    background: #0b0d11;
-    color: #eef2f7;
+    background: #080B10;
+    color: #F4F7FB;
     font-family: "DejaVu Sans", "Noto Sans", sans-serif;
 }
-QFrame#TopBar, QFrame#Panel {
-    background: #11151b;
-    border: 1px solid #202732;
-    border-radius: 16px;
+QFrame#Header, QFrame#Sidebar, QFrame#Hero, QFrame#InfoCard, QFrame#Activity {
+    background: #10151D;
+    border: 1px solid #1E2733;
+    border-radius: 18px;
 }
-QLabel#Logo { color:#ffffff; font-size:24px; font-weight:900; }
-QLabel#Tagline { color:#778292; font-size:10px; }
-QLabel#Status { color:#7d8999; font-size:10px; font-weight:800; }
-QLabel#Title { color:#f4f7fb; font-size:15px; font-weight:850; }
-QLabel#Muted { color:#758091; font-size:10px; }
-QLabel#DeviceName { color:#f4f7fb; font-size:14px; font-weight:850; }
-QLabel#DeviceMeta { color:#7e8998; font-size:9px; }
-QLabel#BigState { color:#dce5ef; font-size:18px; font-weight:900; }
-QLabel#StateGood { color:#5de39a; font-size:10px; font-weight:900; }
-QLabel#StateWarn { color:#f3bd55; font-size:10px; font-weight:900; }
-QLabel#StateBad { color:#ff7777; font-size:10px; font-weight:900; }
-
-QListWidget#Devices {
-    background:#0d1015; border:1px solid #202732; border-radius:12px;
-    padding:5px; outline:0;
-}
-QListWidget#Devices::item { background:transparent; border:0; padding:0; margin:3px; }
-QListWidget#Devices::item:selected { background:transparent; }
+QLabel#Brand { font-size: 25px; font-weight: 900; color: #FFFFFF; }
+QLabel#Eyebrow { font-size: 9px; font-weight: 800; color: #6E9BFF; letter-spacing: 1px; }
+QLabel#Title { font-size: 21px; font-weight: 900; color: #F7F9FC; }
+QLabel#Subtitle, QLabel#Muted { font-size: 10px; color: #788596; }
+QLabel#DeviceTitle { font-size: 18px; font-weight: 900; color: #FFFFFF; }
+QLabel#HeroTitle { font-size: 22px; font-weight: 900; color: #F7F9FC; }
+QLabel#HeroText { font-size: 10px; color: #8793A3; }
+QLabel#StatusGood { color: #62E5A2; font-size: 10px; font-weight: 900; }
+QLabel#StatusWarn { color: #F3C15E; font-size: 10px; font-weight: 900; }
+QLabel#StatusBad { color: #FF7777; font-size: 10px; font-weight: 900; }
 
 QFrame#DeviceRow {
-    background:#131820; border:1px solid #202832; border-radius:11px;
+    background: #0D1219;
+    border: 1px solid #1D2632;
+    border-radius: 13px;
 }
 QFrame#DeviceRow[selected="true"] {
-    background:#172338; border:1px solid #376db8;
+    background: #14223A;
+    border: 1px solid #356FBD;
 }
+QListWidget#Devices {
+    background: transparent;
+    border: none;
+    outline: 0;
+}
+QListWidget#Devices::item { background: transparent; border: none; padding: 0; margin: 3px 0; }
+QListWidget#Devices::item:selected { background: transparent; }
+
+QFrame#PhoneStage {
+    background: #0A0E14;
+    border: 1px solid #202A37;
+    border-radius: 16px;
+}
+QLabel#PhoneGlyph {
+    color: #5D8EFF;
+    font-size: 58px;
+    font-weight: 900;
+}
+QLabel#StageState { color: #AAB5C4; font-size: 10px; font-weight: 800; }
+QLabel#StageHint { color: #647184; font-size: 9px; }
 
 QPushButton {
-    min-height:38px; padding:0 16px; border-radius:10px;
-    border:1px solid #29313d; background:#181d25; color:#cbd3de;
-    font-size:10px; font-weight:850;
+    min-height: 38px;
+    padding: 0 15px;
+    border-radius: 10px;
+    border: 1px solid #293443;
+    background: #171D26;
+    color: #CAD3DE;
+    font-size: 10px;
+    font-weight: 850;
 }
-QPushButton:hover { background:#222a35; color:#ffffff; }
-QPushButton:disabled { color:#596474; background:#14181e; }
-QPushButton#Primary { background:#2878e5; border-color:#2878e5; color:#fff; min-width:125px; }
-QPushButton#Primary:hover { background:#3988f2; }
-QPushButton#Danger { color:#ff9191; }
+QPushButton:hover { background: #222B37; color: #FFFFFF; border-color: #3A4656; }
+QPushButton:disabled { background: #12171E; color: #505C6C; border-color: #202833; }
+QPushButton#Primary {
+    background: #2D73E5;
+    border-color: #2D73E5;
+    color: #FFFFFF;
+    min-width: 145px;
+}
+QPushButton#Primary:hover { background: #3C82F0; border-color: #3C82F0; }
+QPushButton#Danger { color: #FF9292; }
 
 QProgressBar {
-    background:#0b0e13; border:0; border-radius:4px; height:6px;
-    text-align:center; color:transparent;
+    background: #090D13;
+    border: none;
+    border-radius: 4px;
+    min-height: 7px;
+    max-height: 7px;
 }
-QProgressBar::chunk { background:#3b83e8; border-radius:4px; }
+QProgressBar::chunk { background: #4C86EA; border-radius: 4px; }
 
 QTextEdit#Log {
-    background:#090b0f; border:1px solid #202732; border-radius:11px;
-    color:#aab4c1; padding:9px; font-family:"DejaVu Sans Mono",monospace; font-size:9px;
+    background: #090C11;
+    border: none;
+    color: #9AA7B8;
+    padding: 10px;
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 9px;
 }
-QSplitter::handle { background:#0b0d11; width:8px; }
 """
 
 
@@ -84,20 +125,23 @@ class DeviceRow(QFrame):
         dot.setFixedWidth(12)
         dot.setAlignment(Qt.AlignCenter)
         dot.setStyleSheet(
-            "color:#5de39a;" if device.state == "device"
-            else "color:#f3bd55;" if device.state == "unauthorized"
-            else "color:#ff7777;"
+            "color:#62E5A2;" if device.state == "device"
+            else "color:#F3C15E;" if device.state == "unauthorized"
+            else "color:#FF7777;"
         )
         layout.addWidget(dot)
 
         text = QVBoxLayout()
         text.setSpacing(2)
-        model = QLabel(device.model or device.product or "Android phone")
-        model.setObjectName("DeviceName")
-        text.addWidget(model)
-        serial = QLabel(device.serial)
-        serial.setObjectName("DeviceMeta")
-        text.addWidget(serial)
+
+        name = QLabel(device.model or device.product or "Android phone")
+        name.setObjectName("DeviceTitle")
+        name.setStyleSheet("font-size:11px;")
+        text.addWidget(name)
+
+        meta = QLabel(device.serial)
+        meta.setObjectName("Muted")
+        text.addWidget(meta)
         layout.addLayout(text, 1)
 
         state = QLabel(
@@ -106,9 +150,9 @@ class DeviceRow(QFrame):
             else device.state.upper()
         )
         state.setObjectName(
-            "StateGood" if device.state == "device"
-            else "StateWarn" if device.state == "unauthorized"
-            else "StateBad"
+            "StatusGood" if device.state == "device"
+            else "StatusWarn" if device.state == "unauthorized"
+            else "StatusBad"
         )
         layout.addWidget(state)
 
@@ -117,9 +161,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PhoneView")
-        self.resize(1080, 720)
-        self.setMinimumSize(820, 600)
-        self.setStyleSheet(MAIN_QSS)
+        self.resize(1180, 760)
+        self.setMinimumSize(920, 650)
+        self.setStyleSheet(QSS)
 
         self.adb = ADBManager()
         self.scrcpy = ScrcpyManager()
@@ -137,106 +181,127 @@ class MainWindow(QMainWindow):
         self.stream_timer.timeout.connect(self.check_stream)
         self.stream_timer.start(500)
 
-        QTimer.singleShot(100, self.refresh_devices)
+        QTimer.singleShot(120, self.refresh_devices)
 
     def build_ui(self):
         root = QWidget()
         self.setCentralWidget(root)
-        layout = QVBoxLayout(root)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(12)
+        main = QVBoxLayout(root)
+        main.setContentsMargins(18, 16, 18, 16)
+        main.setSpacing(12)
 
-        top = QFrame()
-        top.setObjectName("TopBar")
-        top_l = QHBoxLayout(top)
-        top_l.setContentsMargins(20, 15, 20, 15)
+        header = QFrame()
+        header.setObjectName("Header")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(20, 14, 20, 14)
+        hl.setSpacing(16)
 
         brand = QVBoxLayout()
         brand.setSpacing(1)
-        logo = QLabel("PhoneView")
-        logo.setObjectName("Logo")
-        brand.addWidget(logo)
-        tagline = QLabel("Android screen & device manager")
-        tagline.setObjectName("Tagline")
-        brand.addWidget(tagline)
-        top_l.addLayout(brand, 1)
+        b = QLabel("PhoneView")
+        b.setObjectName("Brand")
+        brand.addWidget(b)
+        sub = QLabel("ANDROID CONTROL CENTER")
+        sub.setObjectName("Eyebrow")
+        brand.addWidget(sub)
+        hl.addLayout(brand)
+
+        hl.addStretch()
 
         self.header_state = QLabel("●  NO DEVICE")
-        self.header_state.setObjectName("Status")
-        top_l.addWidget(self.header_state)
-        layout.addWidget(top)
-
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)
-
-        left = QFrame()
-        left.setObjectName("Panel")
-        left_l = QVBoxLayout(left)
-        left_l.setContentsMargins(15, 15, 15, 15)
-        left_l.setSpacing(9)
-
-        row = QHBoxLayout()
-        title = QLabel("Devices")
-        title.setObjectName("Title")
-        row.addWidget(title)
-        row.addStretch()
-        self.device_count = QLabel("0 devices")
-        self.device_count.setObjectName("Muted")
-        row.addWidget(self.device_count)
-        left_l.addLayout(row)
-
-        self.device_list = QListWidget()
-        self.device_list.setObjectName("Devices")
-        self.device_list.setMinimumWidth(290)
-        self.device_list.itemSelectionChanged.connect(self.on_device_selected)
-        left_l.addWidget(self.device_list, 1)
-
-        self.selection_hint = QLabel("Connect a phone with USB debugging enabled.")
-        self.selection_hint.setObjectName("Muted")
-        self.selection_hint.setWordWrap(True)
-        left_l.addWidget(self.selection_hint)
+        self.header_state.setObjectName("StatusWarn")
+        hl.addWidget(self.header_state)
 
         self.refresh_button = QPushButton("↻  Refresh")
         self.refresh_button.clicked.connect(self.refresh_devices)
-        left_l.addWidget(self.refresh_button)
-        splitter.addWidget(left)
+        hl.addWidget(self.refresh_button)
+        main.addWidget(header)
 
-        right = QFrame()
-        right.setObjectName("Panel")
-        right_l = QVBoxLayout(right)
-        right_l.setContentsMargins(20, 18, 20, 18)
-        right_l.setSpacing(10)
+        content = QHBoxLayout()
+        content.setSpacing(12)
 
-        right_l.addWidget(QLabel("SELECTED DEVICE", objectName="Muted"))
+        sidebar = QFrame()
+        sidebar.setObjectName("Sidebar")
+        sl = QVBoxLayout(sidebar)
+        sl.setContentsMargins(14, 14, 14, 14)
+        sl.setSpacing(9)
+
+        top = QHBoxLayout()
+        title = QLabel("Devices")
+        title.setObjectName("Title")
+        top.addWidget(title)
+        top.addStretch()
+        self.device_count = QLabel("0")
+        self.device_count.setObjectName("Muted")
+        top.addWidget(self.device_count)
+        sl.addLayout(top)
+
+        self.device_list = QListWidget()
+        self.device_list.setObjectName("Devices")
+        self.device_list.setMinimumWidth(300)
+        self.device_list.itemSelectionChanged.connect(self.on_device_selected)
+        sl.addWidget(self.device_list, 1)
+
+        hint = QLabel("USB debugging enabled\n• unlock your phone\n• accept the ADB prompt")
+        hint.setObjectName("Muted")
+        hint.setWordWrap(True)
+        sl.addWidget(hint)
+        content.addWidget(sidebar, 0)
+
+        center = QVBoxLayout()
+        center.setSpacing(12)
+
+        hero = QFrame()
+        hero.setObjectName("Hero")
+        hero_l = QVBoxLayout(hero)
+        hero_l.setContentsMargins(18, 16, 18, 16)
+        hero_l.setSpacing(10)
+
+        hero_top = QHBoxLayout()
+        hero_title_box = QVBoxLayout()
+        hero_title_box.setSpacing(2)
         self.device_name = QLabel("No device selected")
-        self.device_name.setObjectName("BigState")
-        right_l.addWidget(self.device_name)
-
-        self.device_meta = QLabel("Waiting for Android device…")
-        self.device_meta.setObjectName("DeviceMeta")
+        self.device_name.setObjectName("HeroTitle")
+        hero_title_box.addWidget(self.device_name)
+        self.device_meta = QLabel("Connect an Android phone to begin.")
+        self.device_meta.setObjectName("HeroText")
         self.device_meta.setWordWrap(True)
-        right_l.addWidget(self.device_meta)
+        hero_title_box.addWidget(self.device_meta)
+        hero_top.addLayout(hero_title_box, 1)
 
-        self.stream_state = QLabel("NOT STREAMING")
-        self.stream_state.setObjectName("StateWarn")
-        right_l.addWidget(self.stream_state)
+        self.stream_state = QLabel("●  OFFLINE")
+        self.stream_state.setObjectName("StatusWarn")
+        hero_top.addWidget(self.stream_state, 0, Qt.AlignTop)
+        hero_l.addLayout(hero_top)
+
+        stage = QFrame()
+        stage.setObjectName("PhoneStage")
+        stage_l = QVBoxLayout(stage)
+        stage_l.setContentsMargins(20, 24, 20, 24)
+        stage_l.setSpacing(8)
+        stage_l.setAlignment(Qt.AlignCenter)
+
+        glyph = QLabel("▯")
+        glyph.setObjectName("PhoneGlyph")
+        glyph.setAlignment(Qt.AlignCenter)
+        stage_l.addWidget(glyph)
+
+        self.stage_state = QLabel("PHONE MIRROR READY")
+        self.stage_state.setObjectName("StageState")
+        self.stage_state.setAlignment(Qt.AlignCenter)
+        stage_l.addWidget(self.stage_state)
+
+        self.stage_hint = QLabel("The Android mirror opens in the scrcpy window.")
+        self.stage_hint.setObjectName("StageHint")
+        self.stage_hint.setAlignment(Qt.AlignCenter)
+        stage_l.addWidget(self.stage_hint)
+
+        hero_l.addWidget(stage, 1)
 
         self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setValue(0)
+        self.progress.setRange(0, 0)
         self.progress.setVisible(False)
-        right_l.addWidget(self.progress)
-
-        self.status_label = QLabel("Waiting for a device.")
-        self.status_label.setObjectName("Muted")
-        self.status_label.setWordWrap(True)
-        right_l.addWidget(self.status_label)
-
-        right_l.addStretch()
-
-        engine = QLabel(f"Screen engine  •  {self.scrcpy.version() or 'scrcpy not detected'}")
-        engine.setObjectName("Muted")
-        right_l.addWidget(engine)
+        hero_l.addWidget(self.progress)
 
         actions = QHBoxLayout()
         self.connect_button = QPushButton("Connect & View")
@@ -248,31 +313,69 @@ class MainWindow(QMainWindow):
         self.disconnect_button.setObjectName("Danger")
         self.disconnect_button.clicked.connect(self.disconnect)
         actions.addWidget(self.disconnect_button)
-        right_l.addLayout(actions)
+        actions.addStretch()
+        hero_l.addLayout(actions)
+        center.addWidget(hero, 1)
 
-        splitter.addWidget(right)
-        splitter.setSizes([330, 690])
-        layout.addWidget(splitter, 1)
+        cards = QHBoxLayout()
+        cards.setSpacing(12)
 
-        log_header = QHBoxLayout()
-        log_title = QLabel("Live activity")
-        log_title.setObjectName("Title")
-        log_header.addWidget(log_title)
-        log_header.addStretch()
-        log_header.addWidget(QLabel("REAL-TIME", objectName="Muted"))
-        layout.addLayout(log_header)
+        info = QFrame()
+        info.setObjectName("InfoCard")
+        il = QVBoxLayout(info)
+        il.setContentsMargins(16, 13, 16, 13)
+        il.setSpacing(6)
+        il.addWidget(QLabel("DEVICE DETAILS", objectName="Eyebrow"))
+        self.info_text = QLabel("No device information yet.")
+        self.info_text.setObjectName("HeroText")
+        self.info_text.setWordWrap(True)
+        il.addWidget(self.info_text)
+        cards.addWidget(info, 1)
+
+        engine = QFrame()
+        engine.setObjectName("InfoCard")
+        el = QVBoxLayout(engine)
+        el.setContentsMargins(16, 13, 16, 13)
+        el.setSpacing(6)
+        el.addWidget(QLabel("SCREEN ENGINE", objectName="Eyebrow"))
+        self.engine_text = QLabel("scrcpy not detected")
+        self.engine_text.setObjectName("HeroText")
+        self.engine_text.setWordWrap(True)
+        el.addWidget(self.engine_text)
+        cards.addWidget(engine, 1)
+        center.addLayout(cards)
+
+        content.addLayout(center, 1)
+        main.addLayout(content, 1)
+
+        activity = QFrame()
+        activity.setObjectName("Activity")
+        al = QVBoxLayout(activity)
+        al.setContentsMargins(14, 11, 14, 11)
+        al.setSpacing(7)
+
+        ah = QHBoxLayout()
+        ah.addWidget(QLabel("Live activity", objectName="Title"))
+        ah.addStretch()
+        ah.addWidget(QLabel("REAL-TIME", objectName="Eyebrow"))
+        al.addLayout(ah)
 
         self.log = QTextEdit()
         self.log.setObjectName("Log")
         self.log.setReadOnly(True)
-        self.log.setMinimumHeight(105)
-        layout.addWidget(self.log)
+        self.log.setMinimumHeight(96)
+        al.addWidget(self.log)
+        main.addWidget(activity)
 
         self.write_log("PhoneView started.")
         if not self.adb.available():
             self.write_log("✗ ADB was not found.")
         if not self.scrcpy.available():
             self.write_log("✗ scrcpy was not found.")
+        elif self.scrcpy.is_legacy():
+            self.write_log("! Legacy scrcpy detected: " + self.scrcpy.version())
+            self.write_log("! Update scrcpy before starting screen mirroring.")
+        self.engine_text.setText(self.scrcpy.version() or "scrcpy not detected")
         self.update_buttons()
 
     def write_log(self, message):
@@ -284,13 +387,13 @@ class MainWindow(QMainWindow):
         self.refresh_in_progress = True
         try:
             if not self.adb.available():
-                self.status_label.setText("ADB is not installed or not available in PATH.")
+                self.status_label_fallback("ADB is not installed or available in PATH.")
                 self.header_state.setText("●  ADB UNAVAILABLE")
                 return
 
             ok, error = self.adb.start_server()
             if not ok:
-                self.status_label.setText("ADB server could not start.")
+                self.status_label_fallback("ADB server could not start.")
                 self.header_state.setText("●  ADB ERROR")
                 self.write_log(f"✗ ADB server: {error}")
                 return
@@ -318,13 +421,15 @@ class MainWindow(QMainWindow):
             self.device_list.blockSignals(False)
 
             count = len(devices)
-            self.device_count.setText("1 device" if count == 1 else f"{count} devices")
+            self.device_count.setText(f"{count} connected")
 
             if not devices:
                 self.header_state.setText("●  NO DEVICE")
                 self.device_name.setText("No device selected")
-                self.device_meta.setText("Connect an Android phone with USB.")
-                self.status_label.setText("Enable Developer options → USB debugging, then unlock the phone.")
+                self.device_meta.setText("Connect an Android phone with USB debugging enabled.")
+                self.info_text.setText("No device information yet.")
+                self.stage_state.setText("WAITING FOR PHONE")
+                self.stage_hint.setText("Connect USB • unlock phone • accept the ADB prompt")
                 self.update_buttons()
                 return
 
@@ -358,30 +463,37 @@ class MainWindow(QMainWindow):
     def update_device_card(self, device):
         model = device.model or device.product or "Android phone"
         self.device_name.setText(model)
-        self.device_meta.setText(f"Serial: {device.serial}\nADB state: {device.state}")
+        self.device_meta.setText(f"Serial: {device.serial}  •  ADB: {device.state}")
 
         if device.state == "device":
             self.header_state.setText("●  DEVICE READY")
-            self.stream_state.setText("READY")
-            self.stream_state.setObjectName("StateGood")
-            self.status_label.setText("Phone is authorized and ready to mirror.")
-            self.selection_hint.setText("Ready. Click Connect & View.")
+            self.stream_state.setText("●  READY")
+            self.stream_state.setObjectName("StatusGood")
+            self.stage_state.setText("READY TO MIRROR")
+            self.stage_hint.setText("Click Connect & View to open the live Android screen.")
         elif device.state == "unauthorized":
             self.header_state.setText("●  AUTHORIZE PHONE")
-            self.stream_state.setText("AUTHORIZATION REQUIRED")
-            self.stream_state.setObjectName("StateWarn")
-            self.status_label.setText("Unlock the phone and accept the USB debugging prompt.")
-            self.selection_hint.setText("Accept the authorization dialog on the phone.")
+            self.stream_state.setText("●  AUTHORIZATION REQUIRED")
+            self.stream_state.setObjectName("StatusWarn")
+            self.stage_state.setText("USB AUTHORIZATION REQUIRED")
+            self.stage_hint.setText("Unlock the phone and accept the USB debugging dialog.")
         else:
             self.header_state.setText(f"●  {device.state.upper()}")
-            self.stream_state.setText(device.state.upper())
-            self.status_label.setText(f"ADB reports this device as: {device.state}")
+            self.stream_state.setText(f"●  {device.state.upper()}")
+            self.stream_state.setObjectName("StatusBad")
+            self.stage_state.setText("ADB DEVICE NOT READY")
+            self.stage_hint.setText(f"ADB reports: {device.state}")
+
         self.update_buttons()
+
+    def status_label_fallback(self, text):
+        self.stage_hint.setText(text)
 
     def update_buttons(self):
         device = self.current_device()
         ready = bool(device and device.state == "device")
-        self.connect_button.setEnabled(ready and not self.scrcpy.running())
+        legacy = self.scrcpy.is_legacy()
+        self.connect_button.setEnabled(ready and self.scrcpy.available() and not legacy and not self.scrcpy.running())
         self.disconnect_button.setEnabled(self.scrcpy.running())
 
     def connect_selected(self):
@@ -391,33 +503,48 @@ class MainWindow(QMainWindow):
             return
 
         if device.state != "device":
-            if device.state == "unauthorized":
-                QMessageBox.warning(self, "USB authorization", "Unlock the phone and accept the USB debugging prompt, then refresh.")
-            else:
-                QMessageBox.warning(self, "PhoneView", f"ADB reports: {device.state}")
+            QMessageBox.warning(
+                self,
+                "PhoneView",
+                "Unlock the phone and finish USB debugging authorization first."
+                if device.state == "unauthorized"
+                else f"ADB reports: {device.state}",
+            )
             return
 
         if not self.scrcpy.available():
-            QMessageBox.critical(self, "PhoneView", "scrcpy is not installed or cannot be found.")
+            QMessageBox.critical(self, "PhoneView", "scrcpy is not installed.")
+            return
+
+        if self.scrcpy.is_legacy():
+            message = (
+                self.scrcpy.compatibility_message()
+                + "\n\nThe setup screen will update scrcpy automatically when the Linux package is available."
+            )
+            self.write_log("✗ " + message.replace("\n\n", " "))
+            QMessageBox.warning(self, "scrcpy update required", message)
             return
 
         serial = device.serial
         self.connect_button.setEnabled(False)
         self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
-        self.status_label.setText("Starting scrcpy…")
-        self.stream_state.setText("STARTING SCREEN")
-        self.stream_state.setObjectName("StateWarn")
+        self.stage_state.setText("STARTING SCREEN...")
+        self.stage_hint.setText("Launching scrcpy and waiting for the mirror window.")
+        self.stream_state.setText("●  CONNECTING")
+        self.stream_state.setObjectName("StatusWarn")
         self.header_state.setText("●  CONNECTING")
         self.write_log(f"Connecting to {serial}…")
 
         try:
             info = self.adb.device_info(serial)
             model = info["model"] or device.model or "Android phone"
+            android = info["android"] or "?"
+            sdk = info["sdk"] or "?"
             self.device_name.setText(model)
-            self.device_meta.setText(
-                f"{info['brand'] or 'Android'}  •  Android {info['android'] or '?'}  •  SDK {info['sdk'] or '?'}\n"
-                f"Serial: {serial}"
+            self.device_meta.setText(f"{info['brand'] or 'Android'}  •  Android {android}  •  SDK {sdk}")
+            self.info_text.setText(
+                f"Model: {model}\nBrand: {info['brand'] or 'Unknown'}\n"
+                f"Android: {android}\nSDK: {sdk}\nSerial: {serial}"
             )
 
             self.scrcpy.start(serial)
@@ -428,17 +555,19 @@ class MainWindow(QMainWindow):
             self.connected_serial = serial
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN STREAMING")
-            self.stream_state.setObjectName("StateGood")
-            self.status_label.setText("Screen mirror is running.")
+            self.stream_state.setObjectName("StatusGood")
+            self.stage_state.setText("SCREEN IS LIVE")
+            self.stage_hint.setText("The Android screen is open in the scrcpy window.")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
         except Exception as exc:
             self.connected_serial = None
             self.progress.setVisible(False)
-            self.stream_state.setText("SCREEN NOT AVAILABLE")
-            self.stream_state.setObjectName("StateBad")
-            self.status_label.setText("scrcpy could not start. The real error is shown below.")
+            self.stream_state.setText("●  SCREEN UNAVAILABLE")
+            self.stream_state.setObjectName("StatusBad")
+            self.stage_state.setText("MIRROR FAILED")
+            self.stage_hint.setText("The exact scrcpy error has been added to Live activity.")
             self.header_state.setText("●  CONNECTION ERROR")
             self.write_log(f"✗ Connection failed: {exc}")
             QMessageBox.critical(self, "PhoneView", f"scrcpy could not start:\n\n{exc}")
@@ -450,22 +579,24 @@ class MainWindow(QMainWindow):
             self.scrcpy.read_output()
             self.write_log("✗ scrcpy screen window closed or stopped.")
             if self.scrcpy.last_output:
-                self.write_log(self.scrcpy.last_output[-1800:])
+                self.write_log(self.scrcpy.last_output[-2500:])
             self.connected_serial = None
-            self.stream_state.setText("SCREEN STOPPED")
-            self.stream_state.setObjectName("StateWarn")
+            self.stream_state.setText("●  SCREEN STOPPED")
+            self.stream_state.setObjectName("StatusWarn")
+            self.stage_state.setText("SCREEN STOPPED")
+            self.stage_hint.setText("The mirror process ended. Check Live activity for the exact error.")
             self.header_state.setText("●  NOT CONNECTED")
-            self.status_label.setText("The mirror process stopped. Check the activity log for the exact reason.")
             self.update_buttons()
 
     def disconnect(self):
         self.scrcpy.stop()
         self.connected_serial = None
         self.progress.setVisible(False)
-        self.stream_state.setText("NOT STREAMING")
-        self.stream_state.setObjectName("StateWarn")
+        self.stream_state.setText("●  OFFLINE")
+        self.stream_state.setObjectName("StatusWarn")
+        self.stage_state.setText("PHONE MIRROR READY")
+        self.stage_hint.setText("The Android mirror opens in the scrcpy window.")
         self.header_state.setText("●  NO STREAM")
-        self.status_label.setText("Android screen disconnected.")
         self.write_log("Disconnected.")
         self.update_buttons()
 
