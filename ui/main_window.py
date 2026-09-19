@@ -707,65 +707,157 @@ class MainWindow(QMainWindow):
 
     def rebuild_controls(self):
         self._clear_layout(self.controls_layout)
+        self.control_buttons = []
 
         defaults = [
             ("▲", 19), ("◀", 21), ("OK", 66), ("▶", 22), ("▼", 20),
             ("BACK", 4), ("HOME", 3), ("SPACE", 62), ("SHIFT", 59),
             ("CTRL", 113), ("E", 33), ("R", 46),
         ]
-        controls = defaults + [
-            (item.get("label", "Button"), int(item.get("keycode", 0)))
-            for item in self.custom_controls
-        ]
 
-        for label, keycode in controls:
-            row = QHBoxLayout()
-            row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(4)
+        for label, keycode in defaults:
+            self._add_control_row(label, keycode, False, None)
 
-            button = QPushButton(label)
-            button.setObjectName("ControlAccent" if label in {"▲", "◀", "OK", "▶", "▼"} else "Control")
-            button.setEnabled(self.scrcpy.running() and bool(self.connected_serial))
-            button.clicked.connect(lambda checked=False, code=keycode, name=label: self.send_key(code, name))
-            row.addWidget(button, 1)
-            self.control_buttons.append(button)
-
-            is_custom = any(
-                item.get("label") == label and int(item.get("keycode", -1)) == keycode
-                for item in self.custom_controls
-            )
-            if self.controls_edit_mode and is_custom:
-                remove = QPushButton("×")
-                remove.setObjectName("ControlDelete")
-                remove.setFixedWidth(28)
-                remove.clicked.connect(
-                    lambda checked=False, name=label, code=keycode: self.remove_custom_control(name, code)
-                )
-                row.addWidget(remove)
-
-            self.controls_layout.addLayout(row)
+        for index, item in enumerate(self.custom_controls):
+            label = str(item.get("label", "Button"))[:18]
+            try:
+                keycode = int(item.get("keycode", 0))
+            except (TypeError, ValueError):
+                keycode = 0
+            self._add_control_row(label, keycode, True, index)
 
         self.controls_layout.addStretch()
 
+    def _add_control_row(self, label, keycode, is_custom, index):
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(3)
+
+        button = QPushButton(label)
+        button.setObjectName(
+            "ControlAccent"
+            if label in {"▲", "◀", "OK", "▶", "▼"}
+            else "Control"
+        )
+        button.setEnabled(self.scrcpy.running() and bool(self.connected_serial))
+        button.clicked.connect(
+            lambda checked=False, code=keycode, name=label: self.send_key(code, name)
+        )
+        row.addWidget(button, 1)
+        self.control_buttons.append(button)
+
+        if self.controls_edit_mode and is_custom:
+            edit = QPushButton("✎")
+            edit.setObjectName("Control")
+            edit.setFixedWidth(28)
+            edit.clicked.connect(
+                lambda checked=False, idx=index: self.edit_custom_control(idx)
+            )
+            row.addWidget(edit)
+
+            up = QPushButton("↑")
+            up.setObjectName("Control")
+            up.setFixedWidth(28)
+            up.setEnabled(index > 0)
+            up.clicked.connect(
+                lambda checked=False, idx=index: self.move_custom_control(idx, -1)
+            )
+            row.addWidget(up)
+
+            down = QPushButton("↓")
+            down.setObjectName("Control")
+            down.setFixedWidth(28)
+            down.setEnabled(index < len(self.custom_controls) - 1)
+            down.clicked.connect(
+                lambda checked=False, idx=index: self.move_custom_control(idx, 1)
+            )
+            row.addWidget(down)
+
+            remove = QPushButton("×")
+            remove.setObjectName("ControlDelete")
+            remove.setFixedWidth(28)
+            remove.clicked.connect(
+                lambda checked=False, idx=index: self.remove_custom_control(idx)
+            )
+            row.addWidget(remove)
+
+        self.controls_layout.addLayout(row)
+
     def add_custom_control(self):
-        label, ok = QInputDialog.getText(self, "Add Phone Button", "Button name:")
-        if not ok or not label.strip():
+        label, ok = QInputDialog.getText(
+            self, "Add Phone Button", "Button name:"
+        )
+        label = label.strip()
+        if not ok or not label:
             return
+
         keycode, ok = QInputDialog.getInt(
             self, "Android KeyCode", "ADB keycode:", 66, 0, 300, 1
         )
         if not ok:
             return
-        self.custom_controls.append({"label": label.strip()[:18], "keycode": keycode})
+
+        self.custom_controls.append({
+            "label": label[:18],
+            "keycode": keycode,
+        })
         self.save_custom_controls()
         self.rebuild_controls()
-        self.write_log(f"✓ Custom button added: {label.strip()} → KEYCODE_{keycode}")
+        self.write_log(f"✓ Custom button added: {label} → KEYCODE_{keycode}")
 
-    def remove_custom_control(self, label, keycode):
-        for i, item in enumerate(self.custom_controls):
-            if item.get("label") == label and int(item.get("keycode", -1)) == keycode:
-                self.custom_controls.pop(i)
-                break
+    def edit_custom_control(self, index):
+        if index < 0 or index >= len(self.custom_controls):
+            return
+
+        item = self.custom_controls[index]
+        old_label = str(item.get("label", "Button"))
+        try:
+            old_keycode = int(item.get("keycode", 66))
+        except (TypeError, ValueError):
+            old_keycode = 66
+
+        label, ok = QInputDialog.getText(
+            self, "Edit Phone Button", "Button name:", text=old_label
+        )
+        label = label.strip()
+        if not ok or not label:
+            return
+
+        keycode, ok = QInputDialog.getInt(
+            self, "Edit Android KeyCode", "ADB keycode:",
+            old_keycode, 0, 300, 1
+        )
+        if not ok:
+            return
+
+        self.custom_controls[index] = {
+            "label": label[:18],
+            "keycode": keycode,
+        }
+        self.save_custom_controls()
+        self.rebuild_controls()
+        self.write_log(
+            f"✓ Custom button updated: {label} → KEYCODE_{keycode}"
+        )
+
+    def move_custom_control(self, index, direction):
+        new_index = index + direction
+        if index < 0 or new_index < 0 or new_index >= len(self.custom_controls):
+            return
+
+        self.custom_controls[index], self.custom_controls[new_index] = (
+            self.custom_controls[new_index],
+            self.custom_controls[index],
+        )
+        self.save_custom_controls()
+        self.rebuild_controls()
+
+    def remove_custom_control(self, index):
+        if index < 0 or index >= len(self.custom_controls):
+            return
+
+        label = str(self.custom_controls[index].get("label", "Button"))
+        self.custom_controls.pop(index)
         self.save_custom_controls()
         self.rebuild_controls()
         self.write_log(f"✓ Custom button removed: {label}")
@@ -777,7 +869,7 @@ class MainWindow(QMainWindow):
         )
         self.rebuild_controls()
         self.write_log(
-            "✓ Button edit mode enabled. Use × to remove custom buttons."
+            "✓ Button edit mode enabled. Edit, reorder, or remove custom buttons."
             if self.controls_edit_mode
             else "✓ Button edit mode disabled."
         )
