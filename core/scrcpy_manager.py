@@ -64,7 +64,7 @@ class ScrcpyManager:
 
     def version_number(self):
         # scrcpy 1.25 -> (1, 25)
-        match = re.search(r"scrcpys+(d+).(d+)", self.version(), re.IGNORECASE)
+        match = re.search(r"scrcpy\s+(\d+)\.(\d+)", self.version(), re.IGNORECASE)
         if not match:
             return None
         return int(match.group(1)), int(match.group(2))
@@ -94,8 +94,7 @@ class ScrcpyManager:
                 text=True,
                 timeout=3,
             )
-            self._help_text = (result.stdout or "") + "
-" + (result.stderr or "")
+            self._help_text = (result.stdout or "") + "\n" + (result.stderr or "")
         except Exception:
             self._help_text = ""
         return self._help_text
