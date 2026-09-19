@@ -871,8 +871,14 @@ class MainWindow(QMainWindow):
         self.custom_controls.append({
             "label": label[:18],
             "keycode": keycode,
+            "type": "android_keyevent",
+            "x": 0.78,
+            "y": 0.72,
+            "w": 0.12,
+            "h": 0.07,
         })
         self.save_custom_controls()
+        self.mapping_editor.set_mappings(self.custom_controls)
         self.rebuild_controls()
         self.write_log(f"✓ Custom button added: {label} → KEYCODE_{keycode}")
 
@@ -906,6 +912,7 @@ class MainWindow(QMainWindow):
             "keycode": keycode,
         }
         self.save_custom_controls()
+        self.mapping_editor.set_mappings(self.custom_controls)
         self.rebuild_controls()
         self.write_log(
             f"✓ Custom button updated: {label} → KEYCODE_{keycode}"
@@ -921,6 +928,7 @@ class MainWindow(QMainWindow):
             self.custom_controls[index],
         )
         self.save_custom_controls()
+        self.mapping_editor.set_mappings(self.custom_controls)
         self.rebuild_controls()
 
     def remove_custom_control(self, index):
@@ -930,6 +938,7 @@ class MainWindow(QMainWindow):
         label = str(self.custom_controls[index].get("label", "Button"))
         self.custom_controls.pop(index)
         self.save_custom_controls()
+        self.mapping_editor.set_mappings(self.custom_controls)
         self.rebuild_controls()
         self.write_log(f"✓ Custom button removed: {label}")
 
