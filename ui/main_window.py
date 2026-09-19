@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QTextEdit,
-    QInputDialog,
     QDialog,
     QVBoxLayout,
     QWidget,
@@ -734,7 +733,6 @@ class MainWindow(QMainWindow):
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
 
-            self.editor_state.setText("VIEW MODE")
             self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
@@ -749,7 +747,6 @@ class MainWindow(QMainWindow):
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
 
-        self.editor_state.setText("VIEW MODE")
         self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
