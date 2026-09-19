@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QProgressBar,
+    QSizePolicy,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -23,8 +24,9 @@ class SetupWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("PhoneView — Setup")
-        self.resize(900, 720)
-        self.setMinimumSize(820, 640)
+        self.resize(820, 620)
+        self.setMinimumSize(680, 500)
+        self.setSizeGripEnabled(True)
 
         self.checker = DependencyChecker()
         self.process = None
@@ -41,7 +43,7 @@ class SetupWindow(QDialog):
             QDialog {
                 background: #0e1117;
                 font-family: "DejaVu Sans", "Noto Sans", sans-serif;
-                font-size: 13px;
+                font-size: 12px;
                 color: #edf2f7;
             }
             QLabel {
@@ -108,39 +110,40 @@ class SetupWindow(QDialog):
         """)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(12)
+        root.setContentsMargins(20, 18, 20, 18)
+        root.setSpacing(9)
 
         title = QLabel("PhoneView")
-        title.setFont(QFont("DejaVu Sans", 28, QFont.Bold))
+        title.setFont(QFont("DejaVu Sans", 23, QFont.Bold))
         root.addWidget(title)
 
         subtitle = QLabel("Automatic first-run setup")
         subtitle.setObjectName("Muted")
-        subtitle.setStyleSheet("color: #8b949e; font-size: 13px;")
+        subtitle.setStyleSheet("color: #8b949e; font-size: 11px;")
         root.addWidget(subtitle)
 
         card = QFrame()
         card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(18, 16, 18, 16)
-        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(14, 12, 14, 12)
+        card_layout.setSpacing(8)
 
         header = QHBoxLayout()
         self.status = QLabel("Checking your system...")
-        self.status.setFont(QFont("DejaVu Sans", 16, QFont.Bold))
+        self.status.setFont(QFont("DejaVu Sans", 13, QFont.Bold))
         header.addWidget(self.status)
         header.addStretch(1)
 
         self.percent_label = QLabel("0%")
-        self.percent_label.setFont(QFont("DejaVu Sans", 15, QFont.Bold))
+        self.percent_label.setFont(QFont("DejaVu Sans", 12, QFont.Bold))
         header.addWidget(self.percent_label)
         card_layout.addLayout(header)
 
         self.detail = QLabel("PhoneView is checking everything it needs before starting.")
         self.detail.setObjectName("Muted")
         self.detail.setWordWrap(True)
-        self.detail.setMinimumHeight(38)
+        self.detail.setMinimumHeight(28)
+        self.detail.setMaximumHeight(48)
         card_layout.addWidget(self.detail)
 
         self.progress = QProgressBar()
@@ -151,7 +154,7 @@ class SetupWindow(QDialog):
 
         self.progress_text = QLabel("Starting...")
         self.progress_text.setObjectName("Muted")
-        self.progress_text.setStyleSheet("color: #8b949e; font-size: 12px;")
+        self.progress_text.setStyleSheet("color: #8b949e; font-size: 10px;")
         card_layout.addWidget(self.progress_text)
 
         root.addWidget(card)
@@ -159,11 +162,11 @@ class SetupWindow(QDialog):
         dependencies = QFrame()
         dependencies.setObjectName("Card")
         dep_layout = QVBoxLayout(dependencies)
-        dep_layout.setContentsMargins(18, 16, 18, 16)
-        dep_layout.setSpacing(8)
+        dep_layout.setContentsMargins(14, 12, 14, 12)
+        dep_layout.setSpacing(5)
 
         dep_title = QLabel("Required components")
-        dep_title.setFont(QFont("DejaVu Sans", 13, QFont.Bold))
+        dep_title.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
         dep_layout.addWidget(dep_title)
 
         for key in ("adb", "scrcpy", "xcb"):
@@ -173,26 +176,27 @@ class SetupWindow(QDialog):
         root.addWidget(dependencies)
 
         activity_title = QLabel("Live activity")
-        activity_title.setFont(QFont("Sans Serif", 12, QFont.Bold))
+        activity_title.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
         root.addWidget(activity_title)
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMinimumHeight(185)
-        self.log.setFont(QFont("DejaVu Sans Mono", 10))
+        self.log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.log.setMinimumHeight(120)
+        self.log.setFont(QFont("DejaVu Sans Mono", 9))
         root.addWidget(self.log, 1)
 
         buttons = QHBoxLayout()
         self.retry_button = QPushButton("Check again")
-        self.retry_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
+        self.retry_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
         self.retry_button.clicked.connect(self.run_check)
 
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
+        self.cancel_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
         self.cancel_button.clicked.connect(self.cancel_setup)
 
         self.continue_button = QPushButton("Start PhoneView")
-        self.continue_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
+        self.continue_button.setFont(QFont("DejaVu Sans", 9, QFont.Bold))
         self.continue_button.setObjectName("Primary")
         self.continue_button.clicked.connect(self.accept)
         self.continue_button.setEnabled(False)
@@ -207,23 +211,23 @@ class SetupWindow(QDialog):
         row = QFrame()
         row.setObjectName("DependencyRow")
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setContentsMargins(10, 5, 10, 5)
 
         icon = QLabel("○")
-        icon.setFixedWidth(24)
-        icon.setFont(QFont("DejaVu Sans", 15, QFont.Bold))
+        icon.setFixedWidth(20)
+        icon.setFont(QFont("DejaVu Sans", 13, QFont.Bold))
 
         name = QLabel({
             "adb": "Android Debug Bridge (ADB)",
             "scrcpy": "scrcpy",
             "xcb": "Qt XCB cursor support",
         }[key])
-        name.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
-        name.setMinimumWidth(250)
+        name.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
+        name.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         state = QLabel("Waiting")
         state.setObjectName("State")
-        state.setMinimumWidth(150)
+        state.setMinimumWidth(125)
         state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         state.setStyleSheet("color: #8b949e;")
 
