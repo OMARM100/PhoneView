@@ -1,25 +1,37 @@
+import re
 import sys
-from PySide6.QtCore import QProcess, QTimer, Qt
+
+from PySide6.QtCore import QProcess, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton,
-    QTextEdit, QVBoxLayout, QFrame
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
 )
+
 from core.dependency_checker import DependencyChecker
 
 
 class SetupWindow(QDialog):
-    """Modern first-run dependency checker and installer."""
+    """Automatic first-run dependency setup for PhoneView."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("PhoneView — First Run Setup")
-        self.resize(820, 620)
-        self.setMinimumSize(720, 560)
+        self.setWindowTitle("PhoneView — Setup")
+        self.resize(860, 680)
+        self.setMinimumSize(760, 600)
 
         self.checker = DependencyChecker()
         self.process = None
-        self.install_phase = False
+        self.installing = False
+        self.current_packages = []
+        self.package_progress = {}
+        self.rows = {}
 
         self.build_ui()
         QTimer.singleShot(250, self.run_check)
@@ -27,46 +39,69 @@ class SetupWindow(QDialog):
     def build_ui(self):
         self.setStyleSheet("""
             QDialog {
-                background: #11151c;
-                color: #e8edf5;
+                background: #0e1117;
+                color: #edf2f7;
             }
             QLabel {
-                color: #e8edf5;
+                color: #edf2f7;
+            }
+            QFrame#Card {
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 14px;
+            }
+            QFrame#DependencyRow {
+                background: #11161d;
+                border: 1px solid #252c35;
+                border-radius: 10px;
+            }
+            QLabel#Muted {
+                color: #8b949e;
+            }
+            QLabel#State {
+                font-weight: bold;
             }
             QProgressBar {
                 height: 18px;
-                border: 1px solid #303846;
+                border: 1px solid #30363d;
                 border-radius: 9px;
-                background: #1b2029;
+                background: #0d1117;
                 text-align: center;
-                color: #e8edf5;
+                color: #edf2f7;
             }
             QProgressBar::chunk {
-                background: #4f8cff;
+                background: #3b82f6;
                 border-radius: 8px;
             }
             QTextEdit {
-                background: #0b0e13;
-                color: #b9c4d4;
-                border: 1px solid #303846;
-                border-radius: 8px;
+                background: #090c10;
+                color: #aab4c3;
+                border: 1px solid #30363d;
+                border-radius: 10px;
                 padding: 8px;
                 font-family: monospace;
             }
             QPushButton {
-                min-height: 38px;
-                padding: 0 16px;
-                border-radius: 8px;
-                border: 1px solid #303846;
-                background: #202632;
-                color: #e8edf5;
+                min-height: 40px;
+                padding: 0 18px;
+                border-radius: 9px;
+                border: 1px solid #30363d;
+                background: #21262d;
+                color: #edf2f7;
             }
             QPushButton:hover {
-                background: #2a3240;
+                background: #30363d;
             }
             QPushButton:disabled {
-                color: #6f7888;
-                background: #171b23;
+                color: #6e7681;
+                background: #161b22;
+            }
+            QPushButton#Primary {
+                background: #238636;
+                border-color: #2ea043;
+            }
+            QPushButton#Primary:hover {
+                background: #2ea043;
             }
         """)
 
@@ -75,222 +110,397 @@ class SetupWindow(QDialog):
         root.setSpacing(14)
 
         title = QLabel("PhoneView")
-        title.setFont(QFont("Sans Serif", 28, QFont.Bold))
+        title.setFont(QFont("Sans Serif", 29, QFont.Bold))
         root.addWidget(title)
 
-        subtitle = QLabel("Preparing your Android connection environment")
-        subtitle.setStyleSheet("color: #8e9aab; font-size: 14px;")
+        subtitle = QLabel("Automatic first-run setup")
+        subtitle.setObjectName("Muted")
+        subtitle.setStyleSheet("font-size: 14px;")
         root.addWidget(subtitle)
 
         card = QFrame()
-        card.setStyleSheet("""
-            QFrame {
-                background: #181d26;
-                border: 1px solid #2b3340;
-                border-radius: 12px;
-            }
-        """)
+        card.setObjectName("Card")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(18, 16, 18, 16)
-        card_layout.setSpacing(10)
+        card_layout.setSpacing(12)
 
-        self.step_label = QLabel("Step 1 of 2 — Checking dependencies")
-        self.step_label.setStyleSheet("color: #9da9ba; font-size: 12px;")
-        card_layout.addWidget(self.step_label)
+        header = QHBoxLayout()
+        self.status = QLabel("Checking your system...")
+        self.status.setFont(QFont("Sans Serif", 17, QFont.Bold))
+        header.addWidget(self.status)
+        header.addStretch(1)
 
-        self.status = QLabel("Checking required components...")
-        self.status.setFont(QFont("Sans Serif", 16, QFont.Bold))
-        card_layout.addWidget(self.status)
+        self.percent_label = QLabel("0%")
+        self.percent_label.setFont(QFont("Sans Serif", 13, QFont.Bold))
+        header.addWidget(self.percent_label)
+        card_layout.addLayout(header)
 
-        self.detail = QLabel("Scanning ADB, scrcpy and required system libraries.")
+        self.detail = QLabel("PhoneView is checking everything it needs before starting.")
+        self.detail.setObjectName("Muted")
         self.detail.setWordWrap(True)
-        self.detail.setStyleSheet("color: #9da9ba;")
         card_layout.addWidget(self.detail)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
-        self.progress.setFormat("%p%")
+        self.progress.setFormat("")
         card_layout.addWidget(self.progress)
 
         self.progress_text = QLabel("Starting...")
-        self.progress_text.setStyleSheet("color: #738094; font-size: 12px;")
+        self.progress_text.setObjectName("Muted")
+        self.progress_text.setStyleSheet("font-size: 12px;")
         card_layout.addWidget(self.progress_text)
 
         root.addWidget(card)
 
-        log_title = QLabel("Activity")
-        log_title.setStyleSheet("font-size: 13px; font-weight: bold;")
-        root.addWidget(log_title)
+        dependencies = QFrame()
+        dependencies.setObjectName("Card")
+        dep_layout = QVBoxLayout(dependencies)
+        dep_layout.setContentsMargins(18, 16, 18, 16)
+        dep_layout.setSpacing(8)
+
+        dep_title = QLabel("Required components")
+        dep_title.setFont(QFont("Sans Serif", 13, QFont.Bold))
+        dep_layout.addWidget(dep_title)
+
+        for key in ("adb", "scrcpy", "xcb"):
+            row = self.create_dependency_row(key)
+            dep_layout.addWidget(row)
+
+        root.addWidget(dependencies)
+
+        activity_title = QLabel("Live activity")
+        activity_title.setFont(QFont("Sans Serif", 12, QFont.Bold))
+        root.addWidget(activity_title)
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMinimumHeight(230)
-        self.log.setPlaceholderText("Setup activity will appear here...")
+        self.log.setMinimumHeight(170)
         root.addWidget(self.log, 1)
 
         buttons = QHBoxLayout()
-        self.install_button = QPushButton("Install missing components")
-        self.install_button.clicked.connect(self.start_install)
-        self.install_button.setEnabled(False)
-
         self.retry_button = QPushButton("Check again")
         self.retry_button.clicked.connect(self.run_check)
 
-        self.continue_button = QPushButton("Continue to PhoneView")
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.cancel_setup)
+
+        self.continue_button = QPushButton("Start PhoneView")
+        self.continue_button.setObjectName("Primary")
         self.continue_button.clicked.connect(self.accept)
         self.continue_button.setEnabled(False)
 
-        buttons.addWidget(self.install_button)
         buttons.addWidget(self.retry_button)
+        buttons.addWidget(self.cancel_button)
         buttons.addStretch(1)
         buttons.addWidget(self.continue_button)
         root.addLayout(buttons)
 
+    def create_dependency_row(self, key):
+        row = QFrame()
+        row.setObjectName("DependencyRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(12, 8, 12, 8)
+
+        icon = QLabel("○")
+        icon.setFixedWidth(24)
+        icon.setFont(QFont("Sans Serif", 16, QFont.Bold))
+
+        name = QLabel({
+            "adb": "Android Debug Bridge (ADB)",
+            "scrcpy": "scrcpy",
+            "xcb": "Qt XCB cursor support",
+        }[key])
+        name.setFont(QFont("Sans Serif", 11, QFont.Bold))
+
+        state = QLabel("Waiting")
+        state.setObjectName("State")
+        state.setStyleSheet("color: #8b949e;")
+
+        layout.addWidget(icon)
+        layout.addWidget(name)
+        layout.addStretch(1)
+        layout.addWidget(state)
+
+        self.rows[key] = {"row": row, "icon": icon, "state": state}
+        return row
+
+    def set_row(self, key, state, icon, color):
+        item = self.rows.get(key)
+        if not item:
+            return
+        item["icon"].setText(icon)
+        item["icon"].setStyleSheet(f"color: {color};")
+        item["state"].setText(state)
+        item["state"].setStyleSheet(f"color: {color};")
+
     def write_log(self, text):
-        self.log.append(text)
+        if not text:
+            return
+        self.log.append(text.rstrip())
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
     def set_progress(self, value, text):
-        self.progress.setValue(max(0, min(100, value)))
+        value = max(0, min(100, int(value)))
+        self.progress.setValue(value)
+        self.percent_label.setText(f"{value}%")
         self.progress_text.setText(text)
 
     def run_check(self):
         if self.process is not None:
             return
 
-        self.install_phase = False
-        self.step_label.setText("Step 1 of 2 — Checking dependencies")
-        self.status.setText("Checking required components...")
-        self.detail.setText("Scanning ADB, scrcpy and required system libraries.")
-        self.set_progress(5, "Scanning system...")
-        self.install_button.setEnabled(False)
+        self.installing = False
+        self.retry_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
+
+        self.status.setText("Checking your system...")
+        self.detail.setText("Detecting ADB, scrcpy and the required system libraries.")
+        self.set_progress(5, "Scanning installed components...")
+        self.write_log("Starting dependency check.")
 
         items = self.checker.check()
         missing = [item for item in items if not item["ok"]]
 
         for item in items:
-            state = "READY" if item["ok"] else "MISSING"
-            self.write_log(f"[{state}] {item['name']}")
+            if item["ok"]:
+                self.set_row(item["id"], "Ready", "✓", "#3fb950")
+                self.write_log(f"✓ {item['name']} is ready.")
+            else:
+                self.set_row(item["id"], "Missing — will install", "↓", "#d29922")
+                self.write_log(f"↓ {item['name']} is missing.")
 
         if not missing:
-            self.set_progress(100, "Everything is ready.")
-            self.status.setText("Setup complete")
-            self.detail.setText("All required components were found. PhoneView is ready to start.")
-            self.install_button.setEnabled(False)
-            self.continue_button.setEnabled(True)
-            self.step_label.setText("Complete")
+            self.finish_success()
             return
 
-        self.status.setText(f"{len(missing)} component(s) need attention")
-        self.detail.setText("Some required components are missing. You can install them from this window.")
-        self.set_progress(20, f"Found {len(missing)} missing component(s).")
+        if sys.platform.startswith("linux") and self.checker.command_exists("pkexec"):
+            self.status.setText("Missing components found")
+            self.detail.setText("PhoneView will install them automatically. You may only need to approve the system permission dialog.")
+            self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
+            QTimer.singleShot(500, self.start_install)
+            return
 
-        if self.can_auto_install():
-            self.install_button.setEnabled(True)
-            self.write_log("Ready to install missing Linux packages.")
-        else:
-            self.write_log(self.manual_install_message())
-
-    def can_auto_install(self):
-        return sys.platform.startswith("linux") and self.checker.command_exists("pkexec")
-
-    def manual_install_message(self):
-        if sys.platform.startswith("linux"):
-            packages = self.checker.missing_linux_packages()
-            return "Automatic installation requires pkexec. Install manually with: sudo apt install " + " ".join(packages)
-        if sys.platform == "darwin":
-            return "Install ADB and scrcpy with Homebrew, then click Check again."
-        return "Install Android Platform Tools and scrcpy, then click Check again."
+        self.status.setText("Automatic installation is unavailable")
+        self.detail.setText(self.manual_install_message())
+        self.set_progress(15, "Waiting for manual setup.")
+        self.cancel_button.setEnabled(True)
 
     def start_install(self):
+        if self.process is not None:
+            return
+
         packages = self.checker.missing_linux_packages()
         if not packages:
             self.run_check()
             return
 
-        self.install_phase = True
-        self.install_button.setEnabled(False)
+        self.installing = True
+        self.current_packages = packages
+        self.package_progress = {package: 0 for package in packages}
+
         self.retry_button.setEnabled(False)
+        self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
-        self.step_label.setText("Step 2 of 2 — Installing dependencies")
-        self.status.setText("Updating package information...")
-        self.detail.setText("The system package manager is preparing the required components.")
-        self.set_progress(30, "Running apt update...")
-        self.write_log("Requesting administrator permission...")
-        self.write_log("Starting: apt-get update")
+
+        for package in packages:
+            key = self.package_to_key(package)
+            if key:
+                self.set_row(key, "Queued", "↓", "#58a6ff")
+
+        self.status.setText("Preparing downloads...")
+        self.detail.setText("Requesting administrator permission and updating package information.")
+        self.set_progress(20, "Updating package lists...")
+        self.write_log("Automatic setup started.")
+        self.write_log("A system permission dialog may appear now.")
 
         self.process = QProcess(self)
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.read_output)
         self.process.finished.connect(self.install_finished)
         self.process.errorOccurred.connect(self.process_error)
-        self.process.start("pkexec", ["apt-get", "update"])
+
+        self.process.start(
+            "pkexec",
+            [
+                "apt-get",
+                "-o", "Dpkg::Progress-Fancy=0",
+                "-o", "APT::Status-Fd=1",
+                "update",
+            ],
+        )
 
     def read_output(self):
         if not self.process:
             return
+
         data = bytes(self.process.readAllStandardOutput()).decode(errors="replace")
-        if data.strip():
-            self.write_log(data.rstrip())
-            if "Fetched" in data or "Reading package lists" in data:
-                self.set_progress(max(self.progress.value(), 45), "Downloading and reading package lists...")
+        if not data:
+            return
+
+        for raw_line in data.replace("\r", "\n").splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            if line.startswith("dlstatus:"):
+                self.parse_download_status(line)
+                continue
+
+            self.write_log(line)
+
+            lower = line.lower()
+            if "reading package lists" in lower:
+                self.set_progress(max(self.progress.value(), 42), "Reading package lists...")
+            elif "building dependency tree" in lower:
+                self.set_progress(max(self.progress.value(), 48), "Building dependency tree...")
+            elif "building state information" in lower:
+                self.set_progress(max(self.progress.value(), 52), "Building package state...")
+            elif "download complete" in lower:
+                self.set_progress(max(self.progress.value(), 65), "Downloads complete. Installing...")
+            elif "unpacking" in lower:
+                self.set_progress(max(self.progress.value(), 72), "Unpacking packages...")
+            elif "setting up" in lower:
+                self.set_progress(max(self.progress.value(), 84), "Configuring packages...")
+
+    def parse_download_status(self, line):
+        # APT status format can vary by version. We only use values we can parse safely.
+        match = re.search(r'percent:(\d+(?:\.\d+)?)', line)
+        if not match:
+            return
+
+        percent = float(match.group(1))
+        overall = 20 + (percent * 0.48)
+        self.set_progress(max(self.progress.value(), int(overall)), f"Downloading packages... {percent:.0f}%")
 
     def install_finished(self, exit_code, exit_status):
         self.read_output()
 
         if exit_code != 0:
-            self.write_log(f"Package update failed (exit code {exit_code}).")
-            self.status.setText("Package update failed")
-            self.detail.setText("The system could not update its package information. Check the Activity log for details.")
-            self.set_progress(30, "Update failed.")
-            self.process = None
-            self.retry_button.setEnabled(True)
-            self.install_button.setEnabled(True)
+            self.fail_setup(
+                "Package list update failed.",
+                "The system package manager could not update its package information.",
+                exit_code,
+            )
             return
 
-        self.write_log("Package lists updated successfully.")
+        self.write_log("✓ Package lists updated successfully.")
+
         packages = self.checker.missing_linux_packages()
-        self.status.setText("Installing missing components...")
-        self.detail.setText("Downloading and installing: " + ", ".join(packages))
-        self.set_progress(65, "Installing packages...")
-        self.write_log("Starting: apt-get install -y " + " ".join(packages))
+        if not packages:
+            self.process = None
+            self.run_check()
+            return
+
+        self.current_packages = packages
+        self.status.setText("Downloading and installing")
+        self.detail.setText("PhoneView is installing: " + ", ".join(packages))
+        self.set_progress(58, "Downloading required packages...")
+        self.write_log("Installing: " + ", ".join(packages))
 
         try:
-            self.process.finished.disconnect()
+            self.process.finished.disconnect(self.install_finished)
         except (TypeError, RuntimeError):
             pass
 
         self.process.finished.connect(self.package_install_finished)
-        self.process.start("pkexec", ["apt-get", "install", "-y"] + packages)
+        self.process.start(
+            "pkexec",
+            [
+                "apt-get",
+                "-o", "Dpkg::Progress-Fancy=0",
+                "-o", "APT::Status-Fd=1",
+                "install",
+                "-y",
+            ] + packages,
+        )
 
     def package_install_finished(self, exit_code, exit_status):
         self.read_output()
-        self.process = None
-        self.retry_button.setEnabled(True)
 
         if exit_code != 0:
-            self.status.setText("Installation failed")
-            self.detail.setText("One or more components could not be installed. Read the Activity log, then try again.")
-            self.write_log(f"Package installation failed (exit code {exit_code}).")
-            self.set_progress(65, "Installation failed.")
-            self.install_button.setEnabled(True)
+            self.fail_setup(
+                "Installation failed.",
+                "One or more required components could not be installed. The Activity log contains the system error.",
+                exit_code,
+            )
             return
 
-        self.set_progress(90, "Installation finished. Verifying...")
+        self.process = None
+        self.installing = False
+        self.set_progress(95, "Installation finished. Verifying...")
         self.status.setText("Verifying installation")
-        self.detail.setText("Checking every dependency again before starting PhoneView.")
-        self.write_log("Installation finished. Running final verification...")
-        QTimer.singleShot(700, self.run_check)
+        self.detail.setText("Checking every component again before PhoneView starts.")
+        self.write_log("✓ Installation completed. Running final verification...")
+        QTimer.singleShot(800, self.run_check)
+
+    def finish_success(self):
+        self.process = None
+        self.installing = False
+        self.status.setText("Everything is ready")
+        self.detail.setText("All required components are installed. PhoneView can start now.")
+        self.set_progress(100, "Setup completed successfully.")
+        self.write_log("✓ All dependencies are ready.")
+        self.write_log("✓ PhoneView is ready to start.")
+        self.retry_button.setEnabled(True)
+        self.cancel_button.setEnabled(False)
+        self.continue_button.setEnabled(True)
+
+        for item in self.checker.check():
+            if item["ok"]:
+                self.set_row(item["id"], "Ready", "✓", "#3fb950")
+
+    def fail_setup(self, title, detail, exit_code):
+        self.process = None
+        self.installing = False
+        self.status.setText(title)
+        self.detail.setText(detail)
+        self.set_progress(max(15, self.progress.value()), f"Operation failed (exit code {exit_code}).")
+        self.write_log(f"✗ Operation failed with exit code {exit_code}.")
+        self.retry_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
+        self.continue_button.setEnabled(False)
+
+        for package in self.current_packages:
+            key = self.package_to_key(package)
+            if key:
+                self.set_row(key, "Failed", "!", "#f85149")
 
     def process_error(self, error):
-        self.write_log(f"Installer error: {error}")
+        self.write_log(f"✗ Installer error: {error}")
         self.status.setText("Installer could not start")
-        self.detail.setText("The system installer could not be started.")
-        self.retry_button.setEnabled(True)
-        self.install_button.setEnabled(True)
+        self.detail.setText("PhoneView could not start the system package installer.")
         self.process = None
+        self.installing = False
+        self.retry_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
+
+    def package_to_key(self, package):
+        return {
+            "adb": "adb",
+            "scrcpy": "scrcpy",
+            "libxcb-cursor0": "xcb",
+        }.get(package)
+
+    def manual_install_message(self):
+        if sys.platform.startswith("linux"):
+            packages = self.checker.missing_linux_packages()
+            return (
+                "Automatic installation requires the system authorization service (pkexec). "
+                "Install the missing components manually, then click Check again."
+            )
+        if sys.platform == "darwin":
+            return "Automatic macOS installation will be added later. Install ADB and scrcpy, then click Check again."
+        return "Automatic Windows installation will be added later. Install ADB and scrcpy, then click Check again."
+
+    def cancel_setup(self):
+        if self.process is not None:
+            self.write_log("Cancelling current installation...")
+            self.process.kill()
+            self.process = None
+        self.installing = False
+        self.reject()
 
     def closeEvent(self, event):
         if self.process is not None:
