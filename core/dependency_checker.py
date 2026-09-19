@@ -5,7 +5,7 @@ import sys
 
 
 class DependencyChecker:
-    """Checks the external/runtime dependencies PhoneView needs."""
+    """Detects the external components required by PhoneView."""
 
     def __init__(self):
         self.platform = sys.platform
@@ -18,34 +18,48 @@ class DependencyChecker:
     def package_installed_debian(package: str) -> bool:
         try:
             result = subprocess.run(
-                ["dpkg-query", "-W", package],
+                ["dpkg-query", "-W", "-f=${Status}", package],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            return result.returncode == 0
+            return result.returncode == 0 and "install ok installed" in result.stdout
         except (OSError, subprocess.SubprocessError):
             return False
 
     def check(self):
         if self.platform.startswith("linux"):
             return [
-                {"name": "ADB", "ok": self.command_exists("adb"), "package": "adb"},
-                {"name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
-                {"name": "Qt XCB cursor support", "ok": self.package_installed_debian("libxcb-cursor0"), "package": "libxcb-cursor0"},
+                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": "adb"},
+                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
+                {
+                    "id": "xcb",
+                    "name": "Qt XCB cursor support",
+                    "ok": self.package_installed_debian("libxcb-cursor0"),
+                    "package": "libxcb-cursor0",
+                },
             ]
+
         if self.platform == "darwin":
             return [
-                {"name": "ADB", "ok": self.command_exists("adb"), "package": "android-platform-tools"},
-                {"name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
+                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": "android-platform-tools"},
+                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": "scrcpy"},
             ]
+
         if os.name == "nt":
             return [
-                {"name": "ADB", "ok": self.command_exists("adb"), "package": None},
-                {"name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": None},
+                {"id": "adb", "name": "Android Debug Bridge (ADB)", "ok": self.command_exists("adb"), "package": None},
+                {"id": "scrcpy", "name": "scrcpy", "ok": self.command_exists("scrcpy"), "package": None},
             ]
+
         return []
 
     def missing_linux_packages(self):
-        return [item["package"] for item in self.check()
-                if not item["ok"] and item.get("package")]
+        return [
+            item["package"]
+            for item in self.check()
+            if not item["ok"] and item.get("package")
+        ]
+
+    def has_missing(self):
+        return any(not item["ok"] for item in self.check())
