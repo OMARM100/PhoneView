@@ -4,8 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt, QPoint, QRect, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -71,20 +70,10 @@ QFrame#PhoneStage {
     border: 1px solid #202A37;
     border-radius: 16px;
 }
-QFrame#MirrorHost {
-    background: #020305;
-    border: 1px solid #1D2632;
-    border-radius: 13px;
-}
 QFrame#ControlPanel {
     background: #0B1017;
     border: 1px solid #202A37;
     border-radius: 13px;
-}
-QLabel#PhoneGlyph {
-    color: #5D8EFF;
-    font-size: 58px;
-    font-weight: 900;
 }
 QLabel#StageState { color: #AAB5C4; font-size: 10px; font-weight: 800; }
 QLabel#StageHint { color: #647184; font-size: 9px; }
@@ -204,79 +193,6 @@ class DeviceRow(QFrame):
         layout.addWidget(state)
 
 
-class MappingEditor(QWidget):
-    mappingChanged = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("MappingEditor")
-        self.mappings = []
-        self.selected_index = -1
-        self.dragging = False
-        self.drag_offset = QPoint()
-        self.setMinimumSize(420, 560)
-
-    def set_mappings(self, mappings):
-        self.mappings = [dict(x) for x in mappings]
-        self.update()
-
-    def _rect_for(self, item):
-        w=max(48,int(self.width()*float(item.get("w",0.12))))
-        h=max(34,int(self.height()*float(item.get("h",0.07))))
-        x=int(self.width()*float(item.get("x",0.5))-w/2)
-        y=int(self.height()*float(item.get("y",0.5))-h/2)
-        return QRect(x,y,w,h)
-
-    def paintEvent(self,event):
-        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(),QColor("#05070A"))
-        side=min(self.width()-28,int((self.height()-28)*9/16)); ph=int(side*16/9)
-        phone=QRect((self.width()-side)//2,(self.height()-ph)//2,side,ph)
-        p.setBrush(QColor("#101722")); p.setPen(QPen(QColor("#2A3A50"),2)); p.drawRoundedRect(phone,18,18)
-        p.setPen(QColor("#66758A")); p.drawText(phone,Qt.AlignCenter,"ANDROID SCREEN PREVIEW\n\nDrag controls here")
-        for i,item in enumerate(self.mappings):
-            rect=self._rect_for(item); selected=i==self.selected_index
-            p.setBrush(QColor(45,115,229,215 if selected else 145))
-            p.setPen(QPen(QColor("#8DB8FF") if selected else QColor("#385A87"),2))
-            p.drawRoundedRect(rect,9,9); p.setPen(QColor("#FFFFFF"))
-            p.drawText(rect,Qt.AlignCenter,str(item.get("label","KEY"))[:16])
-        p.setPen(QColor("#66758A")); p.drawText(12,self.height()-12,"EDIT MODE  •  Drag controls  •  Double-click to edit")
-
-    def _hit(self,pos):
-        for i in range(len(self.mappings)-1,-1,-1):
-            if self._rect_for(self.mappings[i]).contains(pos): return i
-        return -1
-
-    def mousePressEvent(self,event):
-        if event.button()!=Qt.LeftButton: return
-        self.selected_index=self._hit(event.position().toPoint())
-        self.dragging=self.selected_index>=0
-        if self.dragging:
-            self.drag_offset=event.position().toPoint()-self._rect_for(self.mappings[self.selected_index]).center()
-        self.update()
-
-    def mouseMoveEvent(self,event):
-        if not self.dragging or self.selected_index<0: return
-        pos=event.position().toPoint()-self.drag_offset; item=self.mappings[self.selected_index]
-        item["x"]=max(0.08,min(0.92,pos.x()/max(1,self.width())))
-        item["y"]=max(0.06,min(0.94,pos.y()/max(1,self.height())))
-        self.mappingChanged.emit(); self.update()
-
-    def mouseReleaseEvent(self,event):
-        self.dragging=False
-
-    def mouseDoubleClickEvent(self,event):
-        i=self._hit(event.position().toPoint())
-        if i<0: return
-        item=self.mappings[i]
-        label,ok=QInputDialog.getText(self,"Edit Mapping","Button label:",text=str(item.get("label","KEY")))
-        if not ok or not label.strip(): return
-        key,ok=QInputDialog.getText(self,"Keyboard Mapping","Keyboard key:",text=str(item.get("key","A")))
-        if ok and key.strip():
-            item["label"]=label.strip()[:16]; item["key"]=key.strip()[:32]
-            self.mappingChanged.emit(); self.update()
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -292,7 +208,6 @@ class MainWindow(QMainWindow):
         self.refresh_in_progress = False
         self.project_name = "Android Project"
         self.controls_edit_mode = False
-        self.control_buttons = []
         self.custom_controls = self.load_custom_controls()
 
         self.build_ui()
@@ -447,26 +362,23 @@ class MainWindow(QMainWindow):
 
         stage_l.addWidget(editor_bar)
 
-        self.mirror_host = QFrame()
-        self.mirror_host.setObjectName("MirrorHost")
-        mirror_l = QVBoxLayout(self.mirror_host)
-        mirror_l.setContentsMargins(0, 0, 0, 0)
-        mirror_l.setSpacing(0)
+        self.mapping_workspace = QFrame()
+        self.mapping_workspace.setObjectName("MirrorHost")
+        workspace_l = QVBoxLayout(self.mapping_workspace)
+        workspace_l.setContentsMargins(28, 28, 28, 28)
+        workspace_l.setSpacing(12)
+        workspace_title = QLabel("KEY MAPPING WORKSPACE")
+        workspace_title.setObjectName("Eyebrow")
+        workspace_l.addWidget(workspace_title)
+        self.mapping_status = QLabel("No Android screen is rendered inside PhoneView.\n\nThe Android display is handled exclusively by the separate scrcpy window.\nPhoneView is only the mapping and configuration layer.")
+        self.mapping_status.setObjectName("StageHint")
+        self.mapping_status.setAlignment(Qt.AlignCenter)
+        self.mapping_status.setWordWrap(True)
+        workspace_l.addStretch(1)
+        workspace_l.addWidget(self.mapping_status)
+        workspace_l.addStretch(1)
+        stage_l.addWidget(self.mapping_workspace, 1)
 
-        self.mirror_placeholder = QLabel(
-            "PHONE SCREEN MAPPING\n\n"
-            "This is the control-layout editor.\n"
-            "The real Android screen opens in a separate scrcpy window."
-        )
-        self.mirror_placeholder.setObjectName("StageHint")
-        self.mirror_placeholder.setAlignment(Qt.AlignCenter)
-
-        self.mapping_editor = MappingEditor()
-        self.mapping_editor.set_mappings(self.custom_controls)
-        mirror_l.addWidget(self.mapping_editor, 1)
-
-        stage_l.addWidget(self.mirror_host, 1)
-        self.rebuild_controls()
         hero_l.addWidget(stage, 1)
 
         self.progress = QProgressBar()
@@ -603,7 +515,7 @@ class MainWindow(QMainWindow):
                 self.device_name.setText("No device selected")
                 self.device_meta.setText("Connect an Android phone with USB debugging enabled.")
                 self.info_text.setText("No device information yet.")
-                self.mirror_placeholder.setText("▯\n\nWAITING FOR PHONE\n\nConnect USB • unlock phone • accept the ADB prompt")
+                self.mapping_status.setText("▯\n\nWAITING FOR PHONE\n\nConnect USB • unlock phone • accept the ADB prompt")
                 self.update_buttons()
                 return
 
@@ -643,22 +555,22 @@ class MainWindow(QMainWindow):
             self.header_state.setText("●  DEVICE READY")
             self.stream_state.setText("●  READY")
             self.stream_state.setObjectName("StatusGood")
-            self.mirror_placeholder.setText("▯\n\nPHONE SCREEN\n\nClick Connect & View to start the embedded Android screen.")
+            self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nAndroid screen: separate scrcpy window.")
         elif device.state == "unauthorized":
             self.header_state.setText("●  AUTHORIZE PHONE")
             self.stream_state.setText("●  AUTHORIZATION REQUIRED")
             self.stream_state.setObjectName("StatusWarn")
-            self.mirror_placeholder.setText("▯\n\nUSB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
+            self.mapping_status.setText("▯\n\nUSB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
         else:
             self.header_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setObjectName("StatusBad")
-            self.mirror_placeholder.setText(f"▯\n\nADB DEVICE NOT READY\n\nADB reports: {device.state}")
+            self.mapping_status.setText(f"▯\n\nADB DEVICE NOT READY\n\nADB reports: {device.state}")
 
         self.update_buttons()
 
     def status_label_fallback(self, text):
-        self.mirror_placeholder.setText(f"▯\n\n{text}")
+        self.mapping_status.setText(f"▯\n\n{text}")
 
     def update_buttons(self):
         device = self.current_device()
@@ -702,7 +614,7 @@ class MainWindow(QMainWindow):
         serial = device.serial
         self.connect_button.setEnabled(False)
         self.progress.setVisible(True)
-        self.mirror_placeholder.setText("OPENING ANDROID SCREEN...\n\nThe scrcpy window will stay separate.")
+        self.mapping_status.setText("OPENING ANDROID SCREEN...\n\nThe scrcpy window will stay separate.")
         self.stream_state.setText("●  CONNECTING")
         self.stream_state.setObjectName("StatusWarn")
         self.header_state.setText("●  CONNECTING")
@@ -729,10 +641,8 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
-            self.mirror_placeholder.hide()
-            self.mapping_editor.set_mappings(self.custom_controls)
-            self.mapping_editor.show()
-            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
+            self.mapping_status.hide()
+                                    self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
             self.editor_state.setText("Editor ready\nScrcpy is separate")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
@@ -743,7 +653,7 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN UNAVAILABLE")
             self.stream_state.setObjectName("StatusBad")
-            self.mirror_placeholder.setText("MAPPING EDITOR\n\nMIRROR FAILED\n\nSee Live activity.")
+            self.mapping_status.setText("MAPPING WORKSPACE\n\nscrcpy could not start.\nSee Live activity for details.")
             self.header_state.setText("●  CONNECTION ERROR")
             self.write_log(f"✗ Connection failed: {exc}")
             QMessageBox.critical(self, "PhoneView", f"scrcpy could not start:\n\n{exc}")
@@ -776,11 +686,6 @@ class MainWindow(QMainWindow):
             elif child:
                 self._clear_layout(child)
 
-    def rebuild_controls(self):
-        """Refresh the visual mapping canvas after layout changes."""
-        if hasattr(self, "mapping_editor"):
-            self.mapping_editor.set_mappings(self.custom_controls)
-
     def add_custom_control(self):
         label, ok = QInputDialog.getText(
             self, "Add Phone Button", "Button name:"
@@ -805,8 +710,7 @@ class MainWindow(QMainWindow):
             "h": 0.07,
         })
         self.save_custom_controls()
-        self.mapping_editor.set_mappings(self.custom_controls)
-        self.rebuild_controls()
+                self.rebuild_controls()
         self.write_log(f"✓ Custom button added: {label} → KEYCODE_{keycode}")
 
     def edit_custom_control(self, index):
@@ -839,8 +743,7 @@ class MainWindow(QMainWindow):
             "keycode": keycode,
         }
         self.save_custom_controls()
-        self.mapping_editor.set_mappings(self.custom_controls)
-        self.rebuild_controls()
+                self.rebuild_controls()
         self.write_log(
             f"✓ Custom button updated: {label} → KEYCODE_{keycode}"
         )
@@ -855,8 +758,7 @@ class MainWindow(QMainWindow):
             self.custom_controls[index],
         )
         self.save_custom_controls()
-        self.mapping_editor.set_mappings(self.custom_controls)
-        self.rebuild_controls()
+                self.rebuild_controls()
 
     def remove_custom_control(self, index):
         if index < 0 or index >= len(self.custom_controls):
@@ -865,8 +767,7 @@ class MainWindow(QMainWindow):
         label = str(self.custom_controls[index].get("label", "Button"))
         self.custom_controls.pop(index)
         self.save_custom_controls()
-        self.mapping_editor.set_mappings(self.custom_controls)
-        self.rebuild_controls()
+                self.rebuild_controls()
         self.write_log(f"✓ Custom button removed: {label}")
 
     def toggle_controls_edit(self):
@@ -907,10 +808,9 @@ class MainWindow(QMainWindow):
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
-            self.mapping_editor.show()
-            self.mirror_placeholder.hide()
+                        self.mapping_status.hide()
             self.editor_state.setText("VIEW MODE")
-            self.control_state.setText("Editor mode\nScrcpy stays separate")
+            self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
 
@@ -920,10 +820,9 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
-        self.mapping_editor.show()
-        self.mirror_placeholder.hide()
+                self.mapping_status.hide()
         self.editor_state.setText("VIEW MODE")
-        self.control_state.setText("Editor mode\nScrcpy stays separate")
+        self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
         self.update_buttons()
