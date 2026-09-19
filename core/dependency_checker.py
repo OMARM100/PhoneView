@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import sys
 
+from core.scrcpy_installer import ScrcpyInstaller
+
 
 class DependencyChecker:
     """Detect required components and flag obsolete scrcpy installations."""
@@ -15,6 +17,8 @@ class DependencyChecker:
 
     @staticmethod
     def command_exists(name: str) -> bool:
+        if name == "scrcpy":
+            return ScrcpyInstaller.find_binary() is not None
         return shutil.which(name) is not None
 
     @staticmethod
@@ -33,26 +37,19 @@ class DependencyChecker:
     @staticmethod
     def scrcpy_version():
         try:
-            result = subprocess.run(
-                ["scrcpy", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
-            output = (result.stdout or result.stderr or "").strip()
-            # scrcpy prints e.g. "scrcpy 1.25" (the version line may contain extra text).
-            match = re.search(r"scrcpys+(d+).(d+)", output, re.IGNORECASE)
+            output = ScrcpyInstaller.version()
+            match = re.search(r"scrcpy\s+(\d+)\.(\d+)", output, re.IGNORECASE)
             return (int(match.group(1)), int(match.group(2))) if match else None
         except (OSError, subprocess.SubprocessError):
             return None
 
     def scrcpy_ok(self):
-        if not self.command_exists("scrcpy"):
+        binary = ScrcpyInstaller.find_binary()
+        if not binary:
             return False
         version = self.scrcpy_version()
         if version is None:
-            # Do not block an unusual installation whose version output cannot be parsed.
-            return True
+            return False
         return version[0] >= self.MIN_SCRCPY_MAJOR
 
     def check(self):
