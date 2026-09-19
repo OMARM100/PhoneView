@@ -408,65 +408,64 @@ class MainWindow(QMainWindow):
 
         stage = QFrame()
         stage.setObjectName("PhoneStage")
-        stage_l = QHBoxLayout(stage)
+        stage_l = QVBoxLayout(stage)
         stage_l.setContentsMargins(10, 10, 10, 10)
-        stage_l.setSpacing(10)
+        stage_l.setSpacing(8)
+
+        # GameLoop-style editor toolbar. The real scrcpy mirror is never
+        # inserted into this widget; it remains a separate native window.
+        editor_bar = QFrame()
+        editor_bar.setObjectName("ControlPanel")
+        bar_l = QHBoxLayout(editor_bar)
+        bar_l.setContentsMargins(8, 7, 8, 7)
+        bar_l.setSpacing(7)
+
+        editor_title = QLabel("KEY MAPPING")
+        editor_title.setObjectName("Eyebrow")
+        bar_l.addWidget(editor_title)
+
+        self.editor_state = QLabel("VIEW MODE")
+        self.editor_state.setObjectName("Muted")
+        bar_l.addWidget(self.editor_state)
+        bar_l.addStretch()
+
+        self.edit_controls_button = QPushButton("✎  Edit")
+        self.edit_controls_button.setObjectName("ControlAccent")
+        self.edit_controls_button.clicked.connect(self.toggle_controls_edit)
+        bar_l.addWidget(self.edit_controls_button)
+
+        self.add_mapping_button = QPushButton("＋  Add Button")
+        self.add_mapping_button.setObjectName("Control")
+        self.add_mapping_button.clicked.connect(self.add_custom_control)
+        self.add_mapping_button.setVisible(False)
+        bar_l.addWidget(self.add_mapping_button)
+
+        self.focus_button = QPushButton("Open Android Screen")
+        self.focus_button.setObjectName("Control")
+        self.focus_button.clicked.connect(self.focus_scrcpy)
+        bar_l.addWidget(self.focus_button)
+
+        stage_l.addWidget(editor_bar)
 
         self.mirror_host = QFrame()
         self.mirror_host.setObjectName("MirrorHost")
         mirror_l = QVBoxLayout(self.mirror_host)
-        mirror_l.setContentsMargins(2, 2, 2, 2)
+        mirror_l.setContentsMargins(0, 0, 0, 0)
         mirror_l.setSpacing(0)
-        self.mirror_placeholder = QLabel("MAPPING EDITOR\\n\\nPlace controls over the phone preview.\\nThe real Android screen stays in a separate scrcpy window.")
+
+        self.mirror_placeholder = QLabel(
+            "PHONE SCREEN MAPPING\n\n"
+            "This is the control-layout editor.\n"
+            "The real Android screen opens in a separate scrcpy window."
+        )
         self.mirror_placeholder.setObjectName("StageHint")
         self.mirror_placeholder.setAlignment(Qt.AlignCenter)
-        mirror_l.addWidget(self.mirror_placeholder, 1)
-        stage_l.addWidget(self.mirror_host, 1)
 
-        controls = QFrame()
-        controls.setObjectName("ControlPanel")
-        controls.setFixedWidth(176)
-        self.control_panel_layout = QVBoxLayout(controls)
-        self.control_panel_layout.setContentsMargins(8, 8, 8, 8)
-        self.control_panel_layout.setSpacing(6)
-
-        title = QLabel("PHONE CONTROLS")
-        title.setObjectName("Eyebrow")
-        title.setAlignment(Qt.AlignCenter)
-        self.control_panel_layout.addWidget(title)
-
-        self.control_state = QLabel("Editor mode\\nScrcpy stays separate")
-        self.control_state.setObjectName("Muted")
-        self.control_state.setAlignment(Qt.AlignCenter)
-        self.control_panel_layout.addWidget(self.control_state)
-
-        self.controls_container = QFrame()
-        self.controls_container.setObjectName("ControlsContainer")
-        self.controls_layout = QVBoxLayout(self.controls_container)
-        self.controls_layout.setContentsMargins(0, 0, 0, 0)
-        self.controls_layout.setSpacing(5)
-        self.control_panel_layout.addWidget(self.controls_container, 1)
-
-        add_button = QPushButton("＋  Add Button")
-        add_button.setObjectName("ControlAccent")
-        add_button.clicked.connect(self.add_custom_control)
-        self.control_panel_layout.addWidget(add_button)
-
-        self.edit_controls_button = QPushButton("✎  Edit Buttons")
-        self.edit_controls_button.setObjectName("Control")
-        self.edit_controls_button.clicked.connect(self.toggle_controls_edit)
-        self.control_panel_layout.addWidget(self.edit_controls_button)
-
-        focus = QPushButton("Focus Screen")
-        focus.setObjectName("ControlAccent")
-        focus.clicked.connect(self.focus_scrcpy)
-        self.control_panel_layout.addWidget(focus)
-
-        stage_l.addWidget(controls)
         self.mapping_editor = MappingEditor()
         self.mapping_editor.set_mappings(self.custom_controls)
-        self.mapping_editor.hide()
         mirror_l.addWidget(self.mapping_editor, 1)
+
+        stage_l.addWidget(self.mirror_host, 1)
         self.rebuild_controls()
         hero_l.addWidget(stage, 1)
 
@@ -733,6 +732,7 @@ class MainWindow(QMainWindow):
             self.mirror_placeholder.hide()
             self.mapping_editor.set_mappings(self.custom_controls)
             self.mapping_editor.show()
+            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
             self.control_state.setText("Editor ready\nScrcpy is separate")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
@@ -944,14 +944,15 @@ class MainWindow(QMainWindow):
 
     def toggle_controls_edit(self):
         self.controls_edit_mode = not self.controls_edit_mode
+        self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
         self.edit_controls_button.setText(
-            "✓  Done Editing" if self.controls_edit_mode else "✎  Edit Buttons"
+            "✓  Done" if self.controls_edit_mode else "✎  Edit"
         )
-        self.rebuild_controls()
+        self.add_mapping_button.setVisible(self.controls_edit_mode)
         self.write_log(
-            "✓ Button edit mode enabled. Edit, reorder, or remove custom buttons."
+            "✓ Edit mode enabled. Drag or double-click mapping buttons."
             if self.controls_edit_mode
-            else "✓ Button edit mode disabled."
+            else "✓ Edit mode disabled."
         )
 
     def focus_scrcpy(self):
@@ -979,9 +980,9 @@ class MainWindow(QMainWindow):
             self.connected_serial = None
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
-            self.mirror_placeholder.show()
-            self.mapping_editor.hide()
-            self.mirror_placeholder.setText("MAPPING EDITOR\n\nAndroid screen stopped. Connect & View to start again.")
+            self.mapping_editor.show()
+            self.mirror_placeholder.hide()
+            self.editor_state.setText("VIEW MODE")
             self.control_state.setText("Editor mode\nScrcpy stays separate")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
@@ -992,9 +993,9 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
-        self.mirror_placeholder.show()
-        self.mirror_placeholder.setText("MAPPING EDITOR\n\nConnect & View to open the separate Android screen.")
-        self.mapping_editor.hide()
+        self.mapping_editor.show()
+        self.mirror_placeholder.hide()
+        self.editor_state.setText("VIEW MODE")
         self.control_state.setText("Editor mode\nScrcpy stays separate")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
