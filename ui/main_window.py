@@ -4,8 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QWindow
+from PySide6.QtCore import QTimer, Qt, QPoint, QRect, Signal
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -204,6 +204,79 @@ class DeviceRow(QFrame):
         layout.addWidget(state)
 
 
+class MappingEditor(QWidget):
+    mappingChanged = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("MappingEditor")
+        self.mappings = []
+        self.selected_index = -1
+        self.dragging = False
+        self.drag_offset = QPoint()
+        self.setMinimumSize(420, 560)
+
+    def set_mappings(self, mappings):
+        self.mappings = [dict(x) for x in mappings]
+        self.update()
+
+    def _rect_for(self, item):
+        w=max(48,int(self.width()*float(item.get("w",0.12))))
+        h=max(34,int(self.height()*float(item.get("h",0.07))))
+        x=int(self.width()*float(item.get("x",0.5))-w/2)
+        y=int(self.height()*float(item.get("y",0.5))-h/2)
+        return QRect(x,y,w,h)
+
+    def paintEvent(self,event):
+        p=QPainter(self); p.setRenderHint(QPainter.Antialiasing)
+        p.fillRect(self.rect(),QColor("#05070A"))
+        side=min(self.width()-28,int((self.height()-28)*9/16)); ph=int(side*16/9)
+        phone=QRect((self.width()-side)//2,(self.height()-ph)//2,side,ph)
+        p.setBrush(QColor("#101722")); p.setPen(QPen(QColor("#2A3A50"),2)); p.drawRoundedRect(phone,18,18)
+        p.setPen(QColor("#66758A")); p.drawText(phone,Qt.AlignCenter,"ANDROID SCREEN PREVIEW\n\nDrag controls here")
+        for i,item in enumerate(self.mappings):
+            rect=self._rect_for(item); selected=i==self.selected_index
+            p.setBrush(QColor(45,115,229,215 if selected else 145))
+            p.setPen(QPen(QColor("#8DB8FF") if selected else QColor("#385A87"),2))
+            p.drawRoundedRect(rect,9,9); p.setPen(QColor("#FFFFFF"))
+            p.drawText(rect,Qt.AlignCenter,str(item.get("label","KEY"))[:16])
+        p.setPen(QColor("#66758A")); p.drawText(12,self.height()-12,"EDIT MODE  •  Drag controls  •  Double-click to edit")
+
+    def _hit(self,pos):
+        for i in range(len(self.mappings)-1,-1,-1):
+            if self._rect_for(self.mappings[i]).contains(pos): return i
+        return -1
+
+    def mousePressEvent(self,event):
+        if event.button()!=Qt.LeftButton: return
+        self.selected_index=self._hit(event.position().toPoint())
+        self.dragging=self.selected_index>=0
+        if self.dragging:
+            self.drag_offset=event.position().toPoint()-self._rect_for(self.mappings[self.selected_index]).center()
+        self.update()
+
+    def mouseMoveEvent(self,event):
+        if not self.dragging or self.selected_index<0: return
+        pos=event.position().toPoint()-self.drag_offset; item=self.mappings[self.selected_index]
+        item["x"]=max(0.08,min(0.92,pos.x()/max(1,self.width())))
+        item["y"]=max(0.06,min(0.94,pos.y()/max(1,self.height())))
+        self.mappingChanged.emit(); self.update()
+
+    def mouseReleaseEvent(self,event):
+        self.dragging=False
+
+    def mouseDoubleClickEvent(self,event):
+        i=self._hit(event.position().toPoint())
+        if i<0: return
+        item=self.mappings[i]
+        label,ok=QInputDialog.getText(self,"Edit Mapping","Button label:",text=str(item.get("label","KEY")))
+        if not ok or not label.strip(): return
+        key,ok=QInputDialog.getText(self,"Keyboard Mapping","Keyboard key:",text=str(item.get("key","A")))
+        if ok and key.strip():
+            item["label"]=label.strip()[:16]; item["key"]=key.strip()[:32]
+            self.mappingChanged.emit(); self.update()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -218,10 +291,6 @@ class MainWindow(QMainWindow):
         self.connected_serial = None
         self.refresh_in_progress = False
         self.project_name = "Android Project"
-        self.scrcpy_window = None
-        self.scrcpy_container = None
-        self.scrcpy_window_id = None
-        self.embed_attempts = 0
         self.controls_edit_mode = False
         self.control_buttons = []
         self.custom_controls = self.load_custom_controls()
@@ -235,10 +304,6 @@ class MainWindow(QMainWindow):
         self.stream_timer = QTimer(self)
         self.stream_timer.timeout.connect(self.check_stream)
         self.stream_timer.start(500)
-
-        self.embed_timer = QTimer(self)
-        self.embed_timer.setSingleShot(True)
-        self.embed_timer.timeout.connect(self.try_embed_scrcpy)
 
         QTimer.singleShot(120, self.refresh_devices)
 
@@ -352,7 +417,7 @@ class MainWindow(QMainWindow):
         mirror_l = QVBoxLayout(self.mirror_host)
         mirror_l.setContentsMargins(2, 2, 2, 2)
         mirror_l.setSpacing(0)
-        self.mirror_placeholder = QLabel("▯\\n\\nPHONE SCREEN\\n\\nConnect & View to start")
+        self.mirror_placeholder = QLabel("MAPPING EDITOR\\n\\nPlace controls over the phone preview.\\nThe real Android screen stays in a separate scrcpy window.")
         self.mirror_placeholder.setObjectName("StageHint")
         self.mirror_placeholder.setAlignment(Qt.AlignCenter)
         mirror_l.addWidget(self.mirror_placeholder, 1)
@@ -370,7 +435,7 @@ class MainWindow(QMainWindow):
         title.setAlignment(Qt.AlignCenter)
         self.control_panel_layout.addWidget(title)
 
-        self.control_state = QLabel("Embedded\\ninput ready")
+        self.control_state = QLabel("Editor mode\\nScrcpy stays separate")
         self.control_state.setObjectName("Muted")
         self.control_state.setAlignment(Qt.AlignCenter)
         self.control_panel_layout.addWidget(self.control_state)
@@ -470,7 +535,7 @@ class MainWindow(QMainWindow):
         al.addWidget(self.log)
         main.addWidget(activity)
 
-        self.write_log("PhoneView started.")
+        self.write_log("PhoneView started. Android mirror stays in a separate scrcpy window.")
         if not self.adb.available():
             self.write_log("✗ ADB was not found.")
         if not self.scrcpy.available():
@@ -875,78 +940,11 @@ class MainWindow(QMainWindow):
             else "✓ Button edit mode disabled."
         )
 
-    def _find_scrcpy_window_id(self):
-        """Find the scrcpy native window using a platform-specific host-window backend."""
-        if sys.platform.startswith("linux"):
-            try:
-                result = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True, timeout=2)
-                if result.returncode != 0 or " = " not in result.stdout:
-                    return None
-                raw = result.stdout.split(" = ", 1)[1].strip()
-                for window_id in [x.strip() for x in raw.split(",") if x.strip()]:
-                    result = subprocess.run(["xprop", "-id", window_id, "_NET_WM_NAME", "WM_NAME"], capture_output=True, text=True, timeout=1)
-                    if self.project_name in result.stdout:
-                        return int(window_id, 16)
-            except (OSError, ValueError, subprocess.SubprocessError):
-                return None
-        elif sys.platform == "win32":
-            try:
-                import ctypes
-                hwnd = ctypes.windll.user32.FindWindowW(None, self.project_name)
-                return int(hwnd) if hwnd else None
-            except Exception:
-                return None
-        return None
-
-    def try_embed_scrcpy(self):
-        if not self.scrcpy.running() or not self.connected_serial:
-            return
-        window_id = self._find_scrcpy_window_id()
-        if window_id is None:
-            self.embed_attempts += 1
-            if self.embed_attempts < 40:
-                self.embed_timer.start(150)
-                return
-            self.control_state.setText("Embedding unavailable")
-            self.mirror_placeholder.setText("▯\\n\\nEMBEDDING UNAVAILABLE\\n\\nPhoneView could not attach the scrcpy window to its own interface.")
-            self.stream_state.setText("●  EMBEDDING FAILED")
-            self.stream_state.setObjectName("StatusBad")
-            self.write_log("✗ Native embedding backend could not find the scrcpy window.")
-            self.scrcpy.stop()
-            self.connected_serial = None
-            self.update_buttons()
-            return
-        try:
-            foreign = QWindow.fromWinId(window_id)
-            self.scrcpy_window = foreign
-            self.scrcpy_window_id = window_id
-            container = QWidget.createWindowContainer(foreign, self.mirror_host)
-            container.setFocusPolicy(Qt.StrongFocus)
-            container.setObjectName("ScrcpyContainer")
-            self.scrcpy_container = container
-            layout = self.mirror_host.layout()
-            layout.removeWidget(self.mirror_placeholder)
-            self.mirror_placeholder.hide()
-            layout.addWidget(container)
-            self.stream_state.setText("●  SCREEN LIVE")
-            self.stream_state.setObjectName("StatusGood")
-            self.control_state.setText("Embedded\\nmouse + keyboard")
-            self.write_log("✓ Android screen embedded inside PhoneView.")
-            self.write_log("✓ Mouse and keyboard input are forwarded by scrcpy.")
-            self.rebuild_controls()
-            self.update_buttons()
-            self.focus_scrcpy()
-        except Exception as exc:
-            self.write_log(f"! Embedded mode failed: {exc}")
-            self.embed_attempts += 1
-            self.embed_timer.start(250)
-
     def focus_scrcpy(self):
-        if self.scrcpy_window:
-            self.scrcpy_window.requestActivate()
-            self.scrcpy_window.setFocus()
-        elif self.scrcpy_container:
-            self.scrcpy_container.setFocus()
+        try:
+            self.scrcpy.focus_window(self.project_name)
+        except Exception:
+            self.write_log("! Could not focus the separate scrcpy window.")
 
     def send_key(self, keycode, label):
         serial = self.connected_serial or (self.current_device().serial if self.current_device() else None)
