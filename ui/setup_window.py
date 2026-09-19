@@ -1,7 +1,7 @@
 import re
 import sys
 
-from PySide6.QtCore import QProcess, QTimer
+from PySide6.QtCore import QProcess, QTimer, Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QDialog,
@@ -23,8 +23,8 @@ class SetupWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("PhoneView — Setup")
-        self.resize(860, 680)
-        self.setMinimumSize(760, 600)
+        self.resize(900, 720)
+        self.setMinimumSize(820, 640)
 
         self.checker = DependencyChecker()
         self.process = None
@@ -40,6 +40,8 @@ class SetupWindow(QDialog):
         self.setStyleSheet("""
             QDialog {
                 background: #0e1117;
+                font-family: "DejaVu Sans", "Noto Sans", sans-serif;
+                font-size: 13px;
                 color: #edf2f7;
             }
             QLabel {
@@ -107,15 +109,15 @@ class SetupWindow(QDialog):
 
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(14)
+        root.setSpacing(12)
 
         title = QLabel("PhoneView")
-        title.setFont(QFont("Sans Serif", 29, QFont.Bold))
+        title.setFont(QFont("DejaVu Sans", 28, QFont.Bold))
         root.addWidget(title)
 
         subtitle = QLabel("Automatic first-run setup")
         subtitle.setObjectName("Muted")
-        subtitle.setStyleSheet("font-size: 14px;")
+        subtitle.setStyleSheet("color: #8b949e; font-size: 13px;")
         root.addWidget(subtitle)
 
         card = QFrame()
@@ -126,18 +128,19 @@ class SetupWindow(QDialog):
 
         header = QHBoxLayout()
         self.status = QLabel("Checking your system...")
-        self.status.setFont(QFont("Sans Serif", 17, QFont.Bold))
+        self.status.setFont(QFont("DejaVu Sans", 16, QFont.Bold))
         header.addWidget(self.status)
         header.addStretch(1)
 
         self.percent_label = QLabel("0%")
-        self.percent_label.setFont(QFont("Sans Serif", 13, QFont.Bold))
+        self.percent_label.setFont(QFont("DejaVu Sans", 15, QFont.Bold))
         header.addWidget(self.percent_label)
         card_layout.addLayout(header)
 
         self.detail = QLabel("PhoneView is checking everything it needs before starting.")
         self.detail.setObjectName("Muted")
         self.detail.setWordWrap(True)
+        self.detail.setMinimumHeight(38)
         card_layout.addWidget(self.detail)
 
         self.progress = QProgressBar()
@@ -148,7 +151,7 @@ class SetupWindow(QDialog):
 
         self.progress_text = QLabel("Starting...")
         self.progress_text.setObjectName("Muted")
-        self.progress_text.setStyleSheet("font-size: 12px;")
+        self.progress_text.setStyleSheet("color: #8b949e; font-size: 12px;")
         card_layout.addWidget(self.progress_text)
 
         root.addWidget(card)
@@ -160,7 +163,7 @@ class SetupWindow(QDialog):
         dep_layout.setSpacing(8)
 
         dep_title = QLabel("Required components")
-        dep_title.setFont(QFont("Sans Serif", 13, QFont.Bold))
+        dep_title.setFont(QFont("DejaVu Sans", 13, QFont.Bold))
         dep_layout.addWidget(dep_title)
 
         for key in ("adb", "scrcpy", "xcb"):
@@ -175,17 +178,21 @@ class SetupWindow(QDialog):
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
-        self.log.setMinimumHeight(170)
+        self.log.setMinimumHeight(185)
+        self.log.setFont(QFont("DejaVu Sans Mono", 10))
         root.addWidget(self.log, 1)
 
         buttons = QHBoxLayout()
         self.retry_button = QPushButton("Check again")
+        self.retry_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
         self.retry_button.clicked.connect(self.run_check)
 
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
         self.cancel_button.clicked.connect(self.cancel_setup)
 
         self.continue_button = QPushButton("Start PhoneView")
+        self.continue_button.setFont(QFont("DejaVu Sans", 10, QFont.Bold))
         self.continue_button.setObjectName("Primary")
         self.continue_button.clicked.connect(self.accept)
         self.continue_button.setEnabled(False)
@@ -204,17 +211,20 @@ class SetupWindow(QDialog):
 
         icon = QLabel("○")
         icon.setFixedWidth(24)
-        icon.setFont(QFont("Sans Serif", 16, QFont.Bold))
+        icon.setFont(QFont("DejaVu Sans", 15, QFont.Bold))
 
         name = QLabel({
             "adb": "Android Debug Bridge (ADB)",
             "scrcpy": "scrcpy",
             "xcb": "Qt XCB cursor support",
         }[key])
-        name.setFont(QFont("Sans Serif", 11, QFont.Bold))
+        name.setFont(QFont("DejaVu Sans", 11, QFont.Bold))
+        name.setMinimumWidth(250)
 
         state = QLabel("Waiting")
         state.setObjectName("State")
+        state.setMinimumWidth(150)
+        state.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         state.setStyleSheet("color: #8b949e;")
 
         layout.addWidget(icon)
