@@ -545,6 +545,22 @@ class SetupWindow(QDialog):
         self.write_log(
             "No password is requested, read, stored, or handled by PhoneView."
         )
+        self.write_log("Waiting for the Polkit agent to register with the desktop session...")
+        QTimer.singleShot(1200, self.launch_authorized_update)
+
+    def launch_authorized_update(self):
+        if self.cancelling or not self.installing or self.process is not None:
+            return
+
+        pkexec = self.pkexec_path()
+        if not pkexec:
+            self.fail_setup(
+                "Administrator authorization is unavailable.",
+                "pkexec is no longer available on this system.",
+                1,
+            )
+            return
+
         self.write_log("Starting privileged package manager without a Terminal password prompt.")
 
         self.process = QProcess(self)
@@ -555,7 +571,7 @@ class SetupWindow(QDialog):
         self.process.started.connect(lambda: self.write_log("✓ System package installer process started."))
 
         self.process.start(
-            self.pkexec_path(),
+            pkexec,
             [
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
