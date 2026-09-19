@@ -40,7 +40,8 @@ class DependencyChecker:
                 timeout=3,
             )
             output = (result.stdout or result.stderr or "").strip()
-            match = re.search(r"scrcpy\\s+(\\d+)\\.(\\d+)", output, re.IGNORECASE)
+            # scrcpy prints e.g. "scrcpy 1.25" (the version line may contain extra text).
+            match = re.search(r"scrcpys+(d+).(d+)", output, re.IGNORECASE)
             return (int(match.group(1)), int(match.group(2))) if match else None
         except (OSError, subprocess.SubprocessError):
             return None
@@ -50,6 +51,7 @@ class DependencyChecker:
             return False
         version = self.scrcpy_version()
         if version is None:
+            # Do not block an unusual installation whose version output cannot be parsed.
             return True
         return version[0] >= self.MIN_SCRCPY_MAJOR
 
