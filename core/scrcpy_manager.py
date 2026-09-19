@@ -240,6 +240,38 @@ class ScrcpyManager:
         self._cleanup_log()
 
 
+    def window_exists(self, title):
+        """Return True when a native scrcpy window with the requested title exists."""
+        title = str(title or "").strip()
+        if not title:
+            return False
+
+        try:
+            result = subprocess.run(
+                ["wmctrl", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    candidate = line.split(None, 3)[-1].strip() if line.split(None, 3) else ""
+                    if candidate == title or title in candidate or candidate in title:
+                        return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--name", title],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     def focus_window(self, title):
         """Best-effort focus for the separate native scrcpy window."""
         if not title:
