@@ -392,14 +392,6 @@ class SetupWindow(QDialog):
         self.write_log("Password security: authentication is handled by the operating system.")
         self.write_log("Requesting graphical system authorization (no Terminal window).")
 
-        if sys.platform.startswith("linux"):
-            if not self.ensure_graphical_auth_agent():
-                self.installing = False
-                self.retry_button.setEnabled(True)
-                self.cancel_button.setEnabled(True)
-                self.continue_button.setEnabled(False)
-                return
-
         self.install_timer = QTimer(self)
         self.install_timer.setSingleShot(True)
         self.install_timer.timeout.connect(self.start_authorized_update)
@@ -425,7 +417,11 @@ class SetupWindow(QDialog):
             "Enter your password only in that system dialog."
         )
         self.set_progress(20, "Waiting for the system authorization dialog...")
-        self.write_log("✓ Graphical authentication agent is ready.")
+        self.log_desktop_session()
+        self.write_log("Delegating authentication directly to the system Polkit agent.")
+        self.write_log(
+            "No password is requested, read, stored, or handled by PhoneView."
+        )
         self.write_log("Starting privileged package manager without a Terminal password prompt.")
 
         self.process = QProcess(self)
@@ -446,119 +442,17 @@ class SetupWindow(QDialog):
             ],
         )
 
-    def find_graphical_auth_agent(self):
-        candidates = [
-            "polkit-gnome-authentication-agent-1",
-            "polkit-mate-authentication-agent-1",
-            "mate-polkit",
-            "lxpolkit",
-            "polkit-kde-authentication-agent-1",
-            "xfce-polkit",
-            "lxqt-policykit",
-        ]
-
-        for name in candidates:
-            path = shutil.which(name)
-            if path:
-                return path
-
-        paths = [
-            "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
-            "/usr/lib/polkit-1-gnome/polkit-gnome-authentication-agent-1",
-            "/usr/libexec/polkit-gnome-authentication-agent-1",
-            "/usr/libexec/polkit-mate-authentication-agent-1",
-            "/usr/lib/x86_64-linux-gnu/polkit-gnome/polkit-gnome-authentication-agent-1",
-            "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
-            "/usr/libexec/polkit-kde-authentication-agent-1",
-        ]
-
-        for path in paths:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-
-        return None
-
-    def graphical_auth_agent_running(self):
-        patterns = (
-            "polkit-(gnome|mate)-authentication-agent-1"
-            "|mate-polkit|lxpolkit|polkit-kde-authentication-agent-1"
-            "|xfce-polkit|lxqt-policykit"
+    def log_desktop_session(self):
+        """Log session information without exposing credentials or secrets."""
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "unknown")
+        session = os.environ.get("XDG_SESSION_DESKTOP", "unknown")
+        display = bool(os.environ.get("DISPLAY"))
+        wayland = bool(os.environ.get("WAYLAND_DISPLAY"))
+        self.write_log(f"Desktop session: {desktop} / {session}")
+        self.write_log(
+            "Graphical display session: "
+            + ("available" if (display or wayland) else "not detected")
         )
-        try:
-            result = subprocess.run(
-                ["pgrep", "-af", patterns],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-            return result.returncode == 0 and bool(result.stdout.strip())
-        except (OSError, subprocess.SubprocessError):
-            return False
-
-    def cinnamon_session(self):
-        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
-        session = os.environ.get("XDG_SESSION_DESKTOP", "")
-        return "cinnamon" in f"{desktop}:{session}".lower()
-
-    def ensure_graphical_auth_agent(self):
-        if not sys.platform.startswith("linux"):
-            return True
-
-        if self.graphical_auth_agent_running():
-            self.write_log("✓ A graphical system authentication agent is already running.")
-            return True
-
-        # Cinnamon owns a native Polkit authentication agent inside the desktop
-        # shell rather than requiring a separate polkit-gnome executable.
-        if self.cinnamon_session():
-            self.write_log("Cinnamon desktop detected; checking its native Polkit agent.")
-            if self.cinnamon_polkit_registered():
-                self.write_log("✓ Cinnamon's native graphical authentication agent is registered.")
-                return True
-            self.write_log("Cinnamon is running, but its native Polkit agent is not registered.")
-            self.write_log("Trying a compatible standalone graphical Polkit agent.")
-
-        agent = self.find_graphical_auth_agent()
-        if not agent:
-            self.status.setText("Graphical authentication is unavailable")
-            self.detail.setText(
-                "No graphical Polkit authentication agent is available in this desktop session. "
-                "PhoneView will not request or collect your password itself."
-            )
-            self.set_progress(
-                15,
-                "Enable a system Polkit authentication agent, then click Check again.",
-            )
-            self.write_log("✗ No graphical Polkit authentication agent was found.")
-            self.write_log("PhoneView will never fall back to collecting the user's password.")
-            return False
-
-        self.write_log(f"Starting graphical authentication agent: {agent}")
-        agent_process = QProcess(self)
-        agent_process.setProcessChannelMode(QProcess.MergedChannels)
-        agent_process.start(agent, [])
-
-        if not agent_process.waitForStarted(1500):
-            self.write_log("✗ The graphical authentication agent could not be started.")
-            agent_process.deleteLater()
-            self.status.setText("Authentication agent could not start")
-            self.detail.setText(
-                "The system has a graphical Polkit agent, but it could not be started. "
-                "PhoneView will not fall back to collecting your password."
-            )
-            self.set_progress(15, "Authentication agent startup failed.")
-            return False
-
-        self.auth_agent_process = agent_process
-        self.auth_agent_started_by_us = True
-        self.write_log("✓ Graphical authentication agent started.")
-        return True
-
-    def cinnamon_polkit_registered(self):
-        # Cinnamon's own authentication agent is part of Cinnamon itself.
-        # We intentionally do not manipulate Cinnamon or ask for credentials here.
-        # A running Cinnamon session is sufficient to attempt pkexec.
-        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
     def read_output(self):
         if not self.process:
@@ -718,7 +612,8 @@ class SetupWindow(QDialog):
         self.status.setText("Installer could not start")
         self.detail.setText(
             "PhoneView could not start the system package installer. "
-            "Make sure a graphical system authentication agent is available."
+            "Authentication is delegated to Polkit; PhoneView never collects "
+            "your password."
         )
         self.installing = False
         self.cleanup_process()
