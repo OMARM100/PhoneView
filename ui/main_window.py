@@ -753,7 +753,7 @@ class MainWindow(QMainWindow):
 
     def toggle_controls_edit(self):
         self.controls_edit_mode = not self.controls_edit_mode
-            self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
+        self.editor_state.setText("EDIT MODE" if self.controls_edit_mode else "VIEW MODE")
         self.edit_controls_button.setText(
             "✓  Done" if self.controls_edit_mode else "✎  Edit"
         )
