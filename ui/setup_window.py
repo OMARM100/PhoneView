@@ -69,7 +69,6 @@ class SetupWindow(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.setWindowTitle("PhoneView — Setup")
         self.resize(820, 620)
         self.setMinimumSize(560, 430)
@@ -85,6 +84,7 @@ class SetupWindow(QDialog):
         self.current_packages = []
         self.package_progress = {}
         self.rows = {}
+        self.install_timer = None
 
         self.build_ui()
         QTimer.singleShot(250, self.run_check)
@@ -309,7 +309,7 @@ class SetupWindow(QDialog):
         self.progress_text.setText(text)
 
     def run_check(self):
-        if self.process is not None:
+        if self.process is not None or self.install_timer is not None:
             return
 
         self.installing = False
@@ -346,7 +346,10 @@ class SetupWindow(QDialog):
                 "is never received or stored by PhoneView."
             )
             self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
-            QTimer.singleShot(500, self.start_install)
+            self.install_timer = QTimer(self)
+            self.install_timer.setSingleShot(True)
+            self.install_timer.timeout.connect(self.start_install)
+            self.install_timer.start(500)
             return
 
         self.status.setText("Automatic installation is unavailable")
@@ -355,7 +358,8 @@ class SetupWindow(QDialog):
         self.cancel_button.setEnabled(True)
 
     def start_install(self):
-        if self.process is not None:
+        self.install_timer = None
+        if self.process is not None or self.cancelling:
             return
 
         packages = self.checker.missing_linux_packages()
@@ -396,9 +400,13 @@ class SetupWindow(QDialog):
                 self.continue_button.setEnabled(False)
                 return
 
-        QTimer.singleShot(500, self.start_authorized_update)
+        self.install_timer = QTimer(self)
+        self.install_timer.setSingleShot(True)
+        self.install_timer.timeout.connect(self.start_authorized_update)
+        self.install_timer.start(700)
 
     def start_authorized_update(self):
+        self.install_timer = None
         if self.cancelling or not self.installing or self.process is not None:
             return
 
@@ -445,6 +453,8 @@ class SetupWindow(QDialog):
             "mate-polkit",
             "lxpolkit",
             "polkit-kde-authentication-agent-1",
+            "xfce-polkit",
+            "lxqt-policykit",
         ]
 
         for name in candidates:
@@ -458,6 +468,8 @@ class SetupWindow(QDialog):
             "/usr/libexec/polkit-gnome-authentication-agent-1",
             "/usr/libexec/polkit-mate-authentication-agent-1",
             "/usr/lib/x86_64-linux-gnu/polkit-gnome/polkit-gnome-authentication-agent-1",
+            "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1",
+            "/usr/libexec/polkit-kde-authentication-agent-1",
         ]
 
         for path in paths:
@@ -467,12 +479,14 @@ class SetupWindow(QDialog):
         return None
 
     def graphical_auth_agent_running(self):
+        patterns = (
+            "polkit-(gnome|mate)-authentication-agent-1"
+            "|mate-polkit|lxpolkit|polkit-kde-authentication-agent-1"
+            "|xfce-polkit|lxqt-policykit"
+        )
         try:
             result = subprocess.run(
-                [
-                    "pgrep", "-af",
-                    "polkit-(gnome|mate)-authentication-agent-1|mate-polkit|lxpolkit|polkit-kde-authentication-agent-1",
-                ],
+                ["pgrep", "-af", patterns],
                 capture_output=True,
                 text=True,
                 timeout=2,
@@ -480,6 +494,11 @@ class SetupWindow(QDialog):
             return result.returncode == 0 and bool(result.stdout.strip())
         except (OSError, subprocess.SubprocessError):
             return False
+
+    def cinnamon_session(self):
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+        session = os.environ.get("XDG_SESSION_DESKTOP", "")
+        return "cinnamon" in f"{desktop}:{session}".lower()
 
     def ensure_graphical_auth_agent(self):
         if not sys.platform.startswith("linux"):
@@ -489,21 +508,29 @@ class SetupWindow(QDialog):
             self.write_log("✓ A graphical system authentication agent is already running.")
             return True
 
+        # Cinnamon owns a native Polkit authentication agent inside the desktop
+        # shell rather than requiring a separate polkit-gnome executable.
+        if self.cinnamon_session():
+            self.write_log("Cinnamon desktop detected; checking its native Polkit agent.")
+            if self.cinnamon_polkit_registered():
+                self.write_log("✓ Cinnamon's native graphical authentication agent is registered.")
+                return True
+            self.write_log("Cinnamon is running, but its native Polkit agent is not registered.")
+            self.write_log("Trying a compatible standalone graphical Polkit agent.")
+
         agent = self.find_graphical_auth_agent()
         if not agent:
             self.status.setText("Graphical authentication is unavailable")
             self.detail.setText(
-                "No graphical Polkit authentication agent was found. "
+                "No graphical Polkit authentication agent is available in this desktop session. "
                 "PhoneView will not request or collect your password itself."
             )
             self.set_progress(
                 15,
-                "Install or enable a system Polkit authentication agent, then click Check again.",
+                "Enable a system Polkit authentication agent, then click Check again.",
             )
             self.write_log("✗ No graphical Polkit authentication agent was found.")
-            self.write_log(
-                "PhoneView will never fall back to collecting the user's password."
-            )
+            self.write_log("PhoneView will never fall back to collecting the user's password.")
             return False
 
         self.write_log(f"Starting graphical authentication agent: {agent}")
@@ -526,6 +553,12 @@ class SetupWindow(QDialog):
         self.auth_agent_started_by_us = True
         self.write_log("✓ Graphical authentication agent started.")
         return True
+
+    def cinnamon_polkit_registered(self):
+        # Cinnamon's own authentication agent is part of Cinnamon itself.
+        # We intentionally do not manipulate Cinnamon or ask for credentials here.
+        # A running Cinnamon session is sufficient to attempt pkexec.
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
     def read_output(self):
         if not self.process:
@@ -569,7 +602,6 @@ class SetupWindow(QDialog):
 
     def install_finished(self, exit_code, exit_status):
         self.read_output()
-
         if self.cancelling:
             return
 
@@ -583,7 +615,6 @@ class SetupWindow(QDialog):
             return
 
         self.write_log("✓ Package lists updated successfully.")
-
         packages = self.checker.missing_linux_packages()
         if not packages:
             self.cleanup_process()
@@ -600,7 +631,6 @@ class SetupWindow(QDialog):
             self.process.finished.disconnect(self.install_finished)
         except (TypeError, RuntimeError):
             pass
-
         self.process.finished.connect(self.package_install_finished)
 
         pkexec = self.pkexec_path()
@@ -627,7 +657,6 @@ class SetupWindow(QDialog):
 
     def package_install_finished(self, exit_code, exit_status):
         self.read_output()
-
         if self.cancelling:
             return
 
@@ -673,7 +702,6 @@ class SetupWindow(QDialog):
         self.set_progress(max(15, self.progress.value()), f"Operation failed (exit code {exit_code}).")
         self.write_log(f"✗ Operation failed with exit code {exit_code}.")
         self.cleanup_process()
-
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
@@ -686,7 +714,6 @@ class SetupWindow(QDialog):
     def process_error(self, error):
         if self.cancelling:
             return
-
         self.write_log(f"✗ Installer error: {error}")
         self.status.setText("Installer could not start")
         self.detail.setText(
@@ -703,15 +730,14 @@ class SetupWindow(QDialog):
         self.process = None
         if process is None:
             return
-
-        try:
-            process.readyReadStandardOutput.disconnect(self.read_output)
-        except (TypeError, RuntimeError):
-            pass
-        try:
-            process.errorOccurred.disconnect(self.process_error)
-        except (TypeError, RuntimeError):
-            pass
+        for signal, slot in (
+            (process.readyReadStandardOutput, self.read_output),
+            (process.errorOccurred, self.process_error),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
         process.deleteLater()
 
     def package_to_key(self, package):
@@ -724,14 +750,11 @@ class SetupWindow(QDialog):
     def pkexec_path(self):
         if not sys.platform.startswith("linux"):
             return None
-
         if self.checker.command_exists("pkexec"):
             return "pkexec"
-
         for path in ("/usr/bin/pkexec", "/bin/pkexec"):
             if os.path.isfile(path):
                 return path
-
         return None
 
     def manual_install_message(self):
@@ -741,25 +764,15 @@ class SetupWindow(QDialog):
                 "It is not available on this system. Install it once with: "
                 "sudo apt install policykit-1. Then click Check again."
             )
-
         if sys.platform == "darwin":
-            return (
-                "Automatic macOS installation will be added later. "
-                "Install ADB and scrcpy, then click Check again."
-            )
-
-        return (
-            "Automatic Windows installation will be added later. "
-            "Install ADB and scrcpy, then click Check again."
-        )
+            return "Automatic macOS installation will be added later. Install ADB and scrcpy, then click Check again."
+        return "Automatic Windows installation will be added later. Install ADB and scrcpy, then click Check again."
 
     def stop_auth_agent(self):
         process = self.auth_agent_process
         self.auth_agent_process = None
-
         if process is None:
             return
-
         if self.auth_agent_started_by_us:
             try:
                 if process.state() != QProcess.NotRunning:
@@ -770,16 +783,20 @@ class SetupWindow(QDialog):
             except RuntimeError:
                 pass
             process.deleteLater()
-
         self.auth_agent_started_by_us = False
 
     def cancel_setup(self):
+        if self.install_timer is not None:
+            timer = self.install_timer
+            self.install_timer = None
+            timer.stop()
+            timer.deleteLater()
+
         if self.process is not None:
             self.cancelling = True
             self.write_log("Cancelling current installation...")
             process = self.process
             self.process = None
-
             try:
                 if process.state() != QProcess.NotRunning:
                     process.terminate()
@@ -788,7 +805,6 @@ class SetupWindow(QDialog):
                         process.waitForFinished(1000)
             except RuntimeError:
                 pass
-
             process.deleteLater()
 
         self.installing = False
@@ -796,6 +812,11 @@ class SetupWindow(QDialog):
         self.reject()
 
     def closeEvent(self, event):
+        if self.install_timer is not None:
+            self.write_log("Installation is preparing. Cancel the setup first.")
+            event.ignore()
+            return
+
         if self.process is not None and self.process.state() != QProcess.NotRunning:
             self.write_log("Installation is still running. Cancel the installation first.")
             event.ignore()
