@@ -1,11 +1,14 @@
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 
 
 class ScrcpyManager:
-    """Launch and monitor scrcpy without blocking its output pipe."""
+    """Launch and monitor scrcpy, including compatibility diagnostics."""
+
+    MIN_RECOMMENDED_MAJOR = 2
 
     def __init__(self):
         self.process = None
@@ -21,11 +24,12 @@ class ScrcpyManager:
         if exe:
             return exe
 
+        candidates = []
         if os.name == "nt":
             candidates = [
-                os.path.expandvars(r"%ProgramFiles%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%ProgramFiles(x86)%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%USERPROFILE%\scoop\apps\scrcpy\current\scrcpy.exe"),
+                os.path.expandvars(r"%ProgramFiles%\\scrcpy\\scrcpy.exe"),
+                os.path.expandvars(r"%ProgramFiles(x86)%\\scrcpy\\scrcpy.exe"),
+                os.path.expandvars(r"%USERPROFILE%\\scoop\\apps\\scrcpy\\current\\scrcpy.exe"),
             ]
         else:
             candidates = [
@@ -47,11 +51,34 @@ class ScrcpyManager:
         if not self.scrcpy:
             return ""
         try:
-            result = subprocess.run([self.scrcpy, "--version"], capture_output=True, text=True, timeout=3)
+            result = subprocess.run(
+                [self.scrcpy, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
             output = (result.stdout or result.stderr or "").strip()
             return output.splitlines()[0] if output else ""
         except Exception:
             return ""
+
+    def version_number(self):
+        match = re.search(r"scrcpy\\s+(\\d+)\\.(\\d+)", self.version(), re.IGNORECASE)
+        if not match:
+            return None
+        return int(match.group(1)), int(match.group(2))
+
+    def is_legacy(self):
+        number = self.version_number()
+        return number is not None and number[0] < self.MIN_RECOMMENDED_MAJOR
+
+    def compatibility_message(self):
+        version = self.version() or "unknown"
+        return (
+            f"Installed scrcpy: {version}. "
+            "This is a legacy scrcpy release and may not work with newer Android versions. "
+            "PhoneView requires a current scrcpy release for reliable screen mirroring."
+        )
 
     def _help(self):
         if self._help_text is not None:
@@ -60,8 +87,13 @@ class ScrcpyManager:
             self._help_text = ""
             return ""
         try:
-            result = subprocess.run([self.scrcpy, "--help"], capture_output=True, text=True, timeout=3)
-            self._help_text = (result.stdout or "") + "\n" + (result.stderr or "")
+            result = subprocess.run(
+                [self.scrcpy, "--help"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            self._help_text = (result.stdout or "") + "\\n" + (result.stderr or "")
         except Exception:
             self._help_text = ""
         return self._help_text
@@ -70,16 +102,25 @@ class ScrcpyManager:
         return option in self._help()
 
     def _build_command(self, serial):
-        cmd = [self.scrcpy, "-s", serial, "--window-title", "PhoneView - Android"]
+        cmd = [
+            self.scrcpy,
+            "-s",
+            serial,
+            "--window-title",
+            "PhoneView - Android",
+        ]
 
-        if self._supports("--stay-awake"):
-            cmd.append("--stay-awake")
+        for option, value in (
+            ("--stay-awake", None),
+            ("--always-on-top", None),
+        ):
+            if self._supports(option):
+                cmd.append(option)
+
         if self._supports("--window-width"):
-            cmd += ["--window-width", "420"]
+            cmd += ["--window-width", "520"]
         if self._supports("--window-height"):
-            cmd += ["--window-height", "700"]
-        if self._supports("--always-on-top"):
-            cmd.append("--always-on-top")
+            cmd += ["--window-height", "820"]
 
         return cmd
 
@@ -89,7 +130,11 @@ class ScrcpyManager:
     def _open_log(self):
         self._cleanup_log()
         self._log_file = tempfile.NamedTemporaryFile(
-            mode="w+", encoding="utf-8", prefix="phoneview_scrcpy_", suffix=".log", delete=False
+            mode="w+",
+            encoding="utf-8",
+            prefix="phoneview_scrcpy_",
+            suffix=".log",
+            delete=False,
         )
         self._log_path = self._log_file.name
 
@@ -126,7 +171,9 @@ class ScrcpyManager:
 
         env = os.environ.copy()
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
-            raise RuntimeError("No graphical display session was found. Start PhoneView from your desktop session.")
+            raise RuntimeError(
+                "No graphical display session was found. Start PhoneView from the desktop session."
+            )
 
         self._open_log()
 
@@ -146,7 +193,7 @@ class ScrcpyManager:
             raise RuntimeError(f"Could not start scrcpy: {exc}") from exc
 
         try:
-            self.process.wait(timeout=1.2)
+            self.process.wait(timeout=1.5)
         except subprocess.TimeoutExpired:
             return True
 
@@ -154,7 +201,11 @@ class ScrcpyManager:
         code = self.process.returncode
         self.process = None
         self._cleanup_log()
-        raise RuntimeError(self.last_output[-4000:] if self.last_output else f"scrcpy exited immediately with code {code}.")
+        raise RuntimeError(
+            self.last_output[-5000:]
+            if self.last_output
+            else f"scrcpy exited immediately with code {code}."
+        )
 
     def read_output(self):
         output = self._read_log()
