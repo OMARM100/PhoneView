@@ -60,6 +60,7 @@ class ScrcpyInstaller:
                 capture_output=True,
                 text=True,
                 timeout=4,
+                env=ScrcpyInstaller.runtime_environment(),
             )
             return (result.stdout or result.stderr or "").splitlines()[0].strip()
         except (OSError, subprocess.SubprocessError):
