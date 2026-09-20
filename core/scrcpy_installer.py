@@ -4,7 +4,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
@@ -16,10 +15,6 @@ PHONEVIEW_BUILD_NAME = "v4.1-phoneview"
 INSTALL_ROOT = Path.home() / ".local" / "share" / "phoneview" / "scrcpy"
 BIN_ROOT = Path.home() / ".local" / "bin"
 
-SOURCE_URL = (
-    "https://github.com/Genymobile/scrcpy/archive/refs/tags/"
-    f"{PHONEVIEW_SCRCPY_VERSION}.tar.gz"
-)
 SERVER_URL = (
     "https://github.com/Genymobile/scrcpy/releases/download/"
     f"{PHONEVIEW_SCRCPY_VERSION}/scrcpy-server-{PHONEVIEW_SCRCPY_VERSION}"
@@ -27,7 +22,8 @@ SERVER_URL = (
 SERVER_SHA256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-VENDORED_SRC = PROJECT_ROOT / "vendor" / "scrcpy" / PHONEVIEW_SCRCPY_VERSION / "app" / "src"
+VENDORED_ROOT = PROJECT_ROOT / "vendor" / "scrcpy" / PHONEVIEW_SCRCPY_VERSION
+SDL_INSTALL_RELATIVE = Path("app") / "deps" / "work" / "install" / "linux-native-shared"
 
 
 class ScrcpyInstaller:
@@ -107,6 +103,69 @@ class ScrcpyInstaller:
             )
 
     @staticmethod
+    def _pkg_config_has_sdl3(env):
+        try:
+            result = subprocess.run(
+                ["pkg-config", "--atleast-version=3.2.0", "sdl3"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env=env,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    @staticmethod
+    def runtime_library_dir():
+        path = ScrcpyInstaller.target_root() / "lib"
+        return str(path) if path.is_dir() else ""
+
+    @staticmethod
+    def runtime_environment():
+        env = os.environ.copy()
+        lib_dir = ScrcpyInstaller.runtime_library_dir()
+        if lib_dir:
+            old = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{old}" if old else lib_dir
+        return env
+
+    @staticmethod
+    def _prepare_local_sdl(source_root, env, emit):
+        if ScrcpyInstaller._pkg_config_has_sdl3(env):
+            emit("✓ SDL3 development files are already available.")
+            return env, None
+
+        sdl_script = source_root / "app" / "deps" / "sdl.sh"
+        if not sdl_script.is_file():
+            raise RuntimeError(f"Vendored SDL3 build script is missing: {sdl_script}")
+
+        emit("↓ System SDL3 development files are unavailable.")
+        emit("↓ Building pinned SDL3 3.4.12 locally.")
+
+        for command in ("bash", "cmake", "wget", "tar", "shasum"):
+            ScrcpyInstaller._require_command(command)
+
+        ScrcpyInstaller._run(
+            ["bash", str(sdl_script), "linux", "native", "shared"],
+            cwd=sdl_script.parent,
+            env=env,
+            emit=emit,
+        )
+
+        local_install = source_root / SDL_INSTALL_RELATIVE
+        pkgconfig = local_install / "lib" / "pkgconfig"
+        local_env = env.copy()
+        old_pkg = local_env.get("PKG_CONFIG_PATH", "")
+        local_env["PKG_CONFIG_PATH"] = f"{pkgconfig}:{old_pkg}" if old_pkg else str(pkgconfig)
+
+        if not ScrcpyInstaller._pkg_config_has_sdl3(local_env):
+            raise RuntimeError("Local SDL3 was built, but pkg-config cannot find it.")
+
+        emit(f"✓ Local SDL3 ready: {local_install}")
+        return local_env, local_install
+
+    @staticmethod
     def install(progress=None, log=None):
         def emit(message):
             if log:
@@ -120,29 +179,33 @@ class ScrcpyInstaller:
             print(f"PROGRESS:{value}", flush=True)
 
         if not sys_platform_linux():
-            raise RuntimeError(
-                "The PhoneView scrcpy build currently supports Linux only."
-            )
+            raise RuntimeError("The PhoneView scrcpy build currently supports Linux only.")
 
         machine = platform.machine().lower()
         if machine not in ("x86_64", "amd64"):
             raise RuntimeError(
-                f"PhoneView scrcpy 4.1 is currently prepared for Linux x86_64, "
-                f"not {machine}."
+                f"PhoneView scrcpy 4.1 is currently prepared for Linux x86_64, not {machine}."
             )
 
-        required = ("python3", "meson", "ninja", "gcc", "pkg-config", "tar")
-        for command in required:
+        for command in ("python3", "meson", "ninja", "gcc", "pkg-config", "tar"):
             ScrcpyInstaller._require_command(command)
 
-        if not VENDORED_SRC.is_dir():
-            raise RuntimeError(
-                f"Patched scrcpy source files were not found at: {VENDORED_SRC}"
-            )
+        if not VENDORED_ROOT.is_dir():
+            raise RuntimeError(f"Vendored scrcpy source was not found at: {VENDORED_ROOT}")
+
+        required_source = (
+            VENDORED_ROOT / "meson.build",
+            VENDORED_ROOT / "app" / "meson.build",
+            VENDORED_ROOT / "app" / "src" / "screen.c",
+            VENDORED_ROOT / "app" / "src" / "screen.h",
+            VENDORED_ROOT / "server" / "meson.build",
+        )
+        missing = [str(p) for p in required_source if not p.is_file()]
+        if missing:
+            raise RuntimeError("Vendored scrcpy source tree is incomplete. Missing: " + ", ".join(missing))
 
         target_root = ScrcpyInstaller.target_root()
         target_binary = target_root / "bin" / "scrcpy"
-
         if target_binary.is_file() and os.access(target_binary, os.X_OK):
             BIN_ROOT.mkdir(parents=True, exist_ok=True)
             link = BIN_ROOT / "scrcpy-phoneview"
@@ -155,50 +218,27 @@ class ScrcpyInstaller:
 
         INSTALL_ROOT.mkdir(parents=True, exist_ok=True)
         BIN_ROOT.mkdir(parents=True, exist_ok=True)
+        env = os.environ.copy()
 
         with tempfile.TemporaryDirectory(prefix="phoneview-scrcpy-build-") as temp:
             temp_root = Path(temp)
-            source_archive = temp_root / f"scrcpy-{PHONEVIEW_SCRCPY_VERSION}.tar.gz"
-            server_file = temp_root / "scrcpy-server"
             source_root = temp_root / "source"
+            build_root = temp_root / "build"
+            install_root = temp_root / "install"
+            server_file = temp_root / "scrcpy-server"
 
-            emit(f"Preparing pinned scrcpy {PHONEVIEW_SCRCPY_VERSION} source.")
-            set_progress(5)
-
-            request = urllib.request.Request(
-                SOURCE_URL,
-                headers={"User-Agent": "PhoneView"},
+            emit(f"Using vendored scrcpy {PHONEVIEW_SCRCPY_VERSION} source.")
+            shutil.copytree(
+                VENDORED_ROOT,
+                source_root,
+                ignore=shutil.ignore_patterns("work", "__pycache__", "*.pyc"),
             )
-            with urllib.request.urlopen(request, timeout=30) as response, source_archive.open("wb") as output:
-                total = int(response.headers.get("Content-Length") or 0)
-                received = 0
-                while True:
-                    chunk = response.read(1024 * 256)
-                    if not chunk:
-                        break
-                    output.write(chunk)
-                    received += len(chunk)
-                    if total:
-                        set_progress(5 + (received * 30 / total))
+            set_progress(8)
 
-            emit("Extracting pinned source tree...")
-            with tarfile.open(source_archive, "r:gz") as archive:
-                archive.extractall(temp_root)
-
-            extracted = [
-                item for item in temp_root.iterdir()
-                if item.is_dir() and item.name.startswith("scrcpy-")
-            ]
-            if not extracted:
-                raise RuntimeError("The scrcpy 4.1 source archive did not extract correctly.")
-            source_root = extracted[0]
-
-            emit("Installing PhoneView's patched scrcpy source files...")
-            for relative in ("screen.c", "screen.h"):
-                source_file = VENDORED_SRC / relative
-                destination = source_root / "app" / "src" / relative
-                shutil.copy2(source_file, destination)
-                emit(f"✓ Patched app/src/{relative}")
+            env, local_sdl_install = ScrcpyInstaller._prepare_local_sdl(
+                source_root, env, emit
+            )
+            set_progress(25)
 
             emit("Downloading the matching scrcpy 4.1 Android server...")
             request = urllib.request.Request(
@@ -208,20 +248,13 @@ class ScrcpyInstaller:
             with urllib.request.urlopen(request, timeout=30) as response, server_file.open("wb") as output:
                 shutil.copyfileobj(response, output)
 
-            digest = __import__("hashlib").sha256(server_file.read_bytes()).hexdigest().lower()
+            digest = hashlib.sha256(server_file.read_bytes()).hexdigest().lower()
             if digest != SERVER_SHA256:
-                raise RuntimeError(
-                    "scrcpy-server SHA-256 verification failed. "
-                    "The server file was not used."
-                )
+                raise RuntimeError("scrcpy-server SHA-256 verification failed.")
             emit("✓ Matching scrcpy-server checksum verified.")
-            set_progress(45)
+            set_progress(40)
 
-            build_root = temp_root / "build"
-            install_root = temp_root / "install"
             install_root.mkdir()
-
-            emit("Configuring the PhoneView scrcpy build...")
             ScrcpyInstaller._run(
                 [
                     "meson",
@@ -230,26 +263,31 @@ class ScrcpyInstaller:
                     "--buildtype=release",
                     "--strip",
                     "-Db_lto=true",
+                    "-Dv4l2=false",
+                    "-Dusb=false",
                     f"-Dprebuilt_server={server_file}",
                     f"--prefix={install_root}",
                 ],
                 cwd=source_root,
+                env=env,
                 emit=emit,
             )
-            set_progress(60)
+            set_progress(58)
 
             emit("Compiling PhoneView scrcpy 4.1...")
             ScrcpyInstaller._run(
                 ["ninja", "-C", str(build_root)],
                 cwd=source_root,
+                env=env,
                 emit=emit,
             )
-            set_progress(82)
+            set_progress(78)
 
-            emit("Installing the patched scrcpy engine into PhoneView's private directory...")
+            emit("Installing the patched scrcpy engine...")
             ScrcpyInstaller._run(
                 ["ninja", "-C", str(build_root), "install"],
                 cwd=source_root,
+                env=env,
                 emit=emit,
             )
 
@@ -257,24 +295,22 @@ class ScrcpyInstaller:
                 shutil.rmtree(target_root)
             shutil.copytree(install_root, target_root)
 
-            upstream_license = source_root / "LICENSE"
-            if upstream_license.is_file():
-                shutil.copy2(
-                    upstream_license,
-                    target_root / "SCRCPY-LICENSE.txt",
-                )
+            if local_sdl_install and local_sdl_install.is_dir():
+                target_lib = target_root / "lib"
+                target_lib.mkdir(parents=True, exist_ok=True)
+                for item in (local_sdl_install / "lib").glob("libSDL3.so*"):
+                    shutil.copy2(item, target_lib / item.name)
+
+            license_file = source_root / "LICENSE"
+            if license_file.is_file():
+                shutil.copy2(license_file, target_root / "SCRCPY-LICENSE.txt")
 
         target_binary = target_root / "bin" / "scrcpy"
         if not target_binary.is_file():
-            raise RuntimeError(
-                "The patched scrcpy build completed, but the executable was not found."
-            )
+            raise RuntimeError("The patched scrcpy build completed, but the executable was not found.")
 
         target_binary.chmod(
-            target_binary.stat().st_mode
-            | stat.S_IXUSR
-            | stat.S_IXGRP
-            | stat.S_IXOTH
+            target_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
 
         link = BIN_ROOT / "scrcpy-phoneview"
