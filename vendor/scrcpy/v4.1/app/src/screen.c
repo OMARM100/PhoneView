@@ -507,6 +507,7 @@ phoneview_handle_joystick_key(struct sc_screen *screen,
                 control->runtime_x, control->runtime_y);
             control->active = false;
         }
+        sc_screen_render(screen, false);
         return true;
     }
 
@@ -527,6 +528,7 @@ phoneview_handle_joystick_key(struct sc_screen *screen,
         control->runtime_x, control->runtime_y);
     control->active = true;
 
+    sc_screen_render(screen, false);
     return true;
 }
 
@@ -1052,11 +1054,12 @@ phoneview_draw_text(SDL_Renderer *renderer, float x, float y,
 
 static void
 phoneview_render_controls(struct sc_screen *screen) {
-    if (!screen->phoneview.enabled
-            || !screen->phoneview.edit_mode
-            || !screen->window_shown) {
+    if (!screen->phoneview.enabled || !screen->window_shown) {
         return;
     }
+
+    const bool editing = screen->phoneview.edit_mode;
+    SDL_SetRenderDrawBlendMode(screen->renderer, SDL_BLENDMODE_BLEND);
 
     float origin_x = screen->rect.x;
     float origin_y = screen->rect.y;
@@ -1086,7 +1089,9 @@ phoneview_render_controls(struct sc_screen *screen) {
 
         float cx = origin_x + control->x * width;
         float cy = origin_y + control->y * height;
-        bool selected = (int) i == screen->phoneview.selected_index;
+        bool selected = editing
+                     && (int) i == screen->phoneview.selected_index;
+        bool pressed = control->active || control->source_down;
 
         if (!strcmp(control->type, "joystick")) {
             SDL_SetRenderDrawBlendMode(screen->renderer, SDL_BLENDMODE_BLEND);
@@ -1096,20 +1101,23 @@ phoneview_render_controls(struct sc_screen *screen) {
                 cx, cy,
                 PHONEVIEW_JOYSTICK_RADIUS,
                 18, 30, 45,
-                selected ? 210 : 165);
+                editing ? (selected ? 210 : 165)
+                        : (pressed ? 145 : 85));
 
             phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
                 PHONEVIEW_JOYSTICK_RADIUS,
                 92, 140, 205,
-                selected ? 245 : 210);
+                editing ? (selected ? 245 : 210)
+                        : (pressed ? 200 : 150));
             phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
                 PHONEVIEW_JOYSTICK_RADIUS - 3.f,
                 18, 30, 45,
-                selected ? 210 : 165);
+                editing ? (selected ? 210 : 165)
+                        : (pressed ? 145 : 85));
 
             float dx = (control->active_right ? 1.f : 0.f)
                      - (control->active_left ? 1.f : 0.f);
@@ -1129,19 +1137,21 @@ phoneview_render_controls(struct sc_screen *screen) {
                 kx, ky,
                 PHONEVIEW_JOYSTICK_KNOB_RADIUS,
                 60, 135, 245,
-                selected ? 245 : 220);
+                editing ? (selected ? 245 : 220)
+                        : (pressed ? 245 : 200));
             phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
                 PHONEVIEW_JOYSTICK_KNOB_RADIUS,
                 235, 245, 255,
-                230);
+                editing ? 230 : 145);
             phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
                 PHONEVIEW_JOYSTICK_KNOB_RADIUS - 3.f,
                 60, 135, 245,
-                selected ? 245 : 220);
+                editing ? (selected ? 245 : 220)
+                        : (pressed ? 245 : 190));
 
             phoneview_draw_text(screen->renderer, cx - 4.f, cy - 36.f,
                                 "W");
@@ -1164,15 +1174,18 @@ phoneview_render_controls(struct sc_screen *screen) {
                        origin_y,
                        origin_y + MAX(0.f, height - PHONEVIEW_CONTROL_H));
 
-        uint8_t alpha = selected ? 240 : 210;
+        uint8_t alpha = editing
+                       ? (selected ? 240 : 210)
+                       : (pressed ? 155 : 78);
         phoneview_draw_box(screen->renderer,
                            bx, by,
                            PHONEVIEW_CONTROL_W, PHONEVIEW_CONTROL_H,
-                           selected ? 42 : 32,
-                           selected ? 145 : 115,
-                           selected ? 245 : 229,
+                           pressed ? 45 : (selected ? 42 : 32),
+                           pressed ? 155 : (selected ? 145 : 115),
+                           pressed ? 255 : (selected ? 245 : 229),
                            alpha,
-                           255, 255, 255, 220);
+                           255, 255, 255,
+                           editing ? 220 : 90);
 
         char display[48];
         if (!strcmp(control->type, "look")) {
