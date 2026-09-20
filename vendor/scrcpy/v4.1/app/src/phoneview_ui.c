@@ -61,6 +61,7 @@ struct sc_phoneview_ui {
     void *userdata;
     bool edit_mode;
     bool capture_mode;
+    int add_type;
 };
 
 static void
@@ -105,9 +106,53 @@ phoneview_ui_on_edit(GtkButton *button, gpointer userdata) {
 }
 
 static void
-phoneview_ui_on_add(GtkButton *button, gpointer userdata) {
+phoneview_ui_on_add(GtkToolButton *button, gpointer userdata) {
     (void) button;
     phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_ADD);
+}
+
+static void
+phoneview_ui_select_add_type(GtkWidget *menu_item, gpointer userdata) {
+    struct sc_phoneview_ui *ui = userdata;
+    if (!ui) {
+        return;
+    }
+
+    ui->add_type = GPOINTER_TO_INT(
+        g_object_get_data(G_OBJECT(menu_item), "phoneview-add-type"));
+    phoneview_ui_emit(ui, SC_PHONEVIEW_UI_ACTION_ADD);
+}
+
+static GtkWidget *
+phoneview_ui_make_add_menu(struct sc_phoneview_ui *ui) {
+    GtkWidget *menu = gtk_menu_new();
+
+    static const struct {
+        int type;
+        const char *label;
+    } items[] = {
+        {SC_PHONEVIEW_ADD_KEYBOARD, "Keyboard Key  •  Hold"},
+        {SC_PHONEVIEW_ADD_TAP, "Keyboard Key  •  Tap"},
+        {SC_PHONEVIEW_ADD_TOGGLE, "Keyboard Key  •  Toggle"},
+        {SC_PHONEVIEW_ADD_MOUSE, "Mouse Button"},
+        {SC_PHONEVIEW_ADD_LOOK, "Mouse Look / Camera"},
+        {SC_PHONEVIEW_ADD_WHEEL, "Mouse Wheel"},
+        {SC_PHONEVIEW_ADD_JOYSTICK, "Virtual Joystick  •  WASD"},
+    };
+
+    for (size_t i = 0; i < sizeof(items) / sizeof(items[0]); ++i) {
+        GtkWidget *item = gtk_menu_item_new_with_label(items[i].label);
+        g_object_set_data(G_OBJECT(item),
+                          "phoneview-add-type",
+                          GINT_TO_POINTER(items[i].type));
+        g_signal_connect(item, "activate",
+                         G_CALLBACK(phoneview_ui_select_add_type),
+                         ui);
+        gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    }
+
+    gtk_widget_show_all(menu);
+    return menu;
 }
 
 static void
@@ -572,7 +617,6 @@ sc_phoneview_ui_create(const char *title,
                        FALSE, FALSE, 0);
 
     GtkToolItem *edit_item = gtk_tool_item_new();
-    GtkToolItem *add_item = gtk_tool_item_new();
     GtkToolItem *save_item = gtk_tool_item_new();
     GtkToolItem *done_item = gtk_tool_item_new();
 
@@ -580,10 +624,19 @@ sc_phoneview_ui_create(const char *title,
         phoneview_make_toolbar_button("Edit",
                                        "document-edit-symbolic",
                                        "phoneview-edit-button");
+
     ui->add_button =
-        phoneview_make_toolbar_button("Add Button",
-                                       "list-add-symbolic",
-                                       "phoneview-add-button");
+        GTK_WIDGET(gtk_menu_tool_button_new(
+            gtk_image_new_from_icon_name("list-add-symbolic",
+                                         GTK_ICON_SIZE_BUTTON),
+            "Add Button"));
+    gtk_menu_tool_button_set_menu(
+        GTK_MENU_TOOL_BUTTON(ui->add_button),
+        phoneview_ui_make_add_menu(ui));
+    gtk_widget_set_name(ui->add_button, "phoneview-add-button");
+    gtk_widget_set_valign(ui->add_button, GTK_ALIGN_CENTER);
+    gtk_widget_set_can_focus(ui->add_button, FALSE);
+
     ui->save_button =
         phoneview_make_toolbar_button("Save",
                                        "document-save-symbolic",
@@ -594,12 +647,12 @@ sc_phoneview_ui_create(const char *title,
                                        "phoneview-done-button");
 
     gtk_container_add(GTK_CONTAINER(edit_item), ui->edit_button);
-    gtk_container_add(GTK_CONTAINER(add_item), ui->add_button);
     gtk_container_add(GTK_CONTAINER(save_item), ui->save_button);
     gtk_container_add(GTK_CONTAINER(done_item), ui->done_button);
 
     gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), edit_item, -1);
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), add_item, -1);
+    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar),
+                       GTK_TOOL_ITEM(ui->add_button), -1);
     gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar),
                        gtk_separator_tool_item_new(),
                        -1);
@@ -912,6 +965,11 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
     }
 }
 
+int
+sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui) {
+    return ui ? ui->add_type : SC_PHONEVIEW_ADD_KEYBOARD;
+}
+
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui) {
     return ui && ui->edit_mode;
@@ -1032,6 +1090,12 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
                                  bool capture_mode) {
     (void) ui;
     (void) capture_mode;
+}
+
+int
+sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui) {
+    (void) ui;
+    return SC_PHONEVIEW_ADD_KEYBOARD;
 }
 
 bool
