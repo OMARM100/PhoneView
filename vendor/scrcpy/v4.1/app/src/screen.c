@@ -996,6 +996,7 @@ sc_screen_is_relative_mode(struct sc_screen *screen) {
 static void
 compute_content_rect(struct sc_size window_size, struct sc_size content_size,
                      bool is_icon, enum sc_render_fit render_fit,
+                     bool phoneview,
                      SDL_FRect *rect) {
     if (is_icon) {
         if (content_size.width <= window_size.width
@@ -1021,6 +1022,32 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
         rect->y = 0;
         rect->w = window_size.width;
         rect->h = window_size.height;
+        return;
+    } else if (phoneview) {
+        /*
+         * Preserve the Android aspect ratio without centering it vertically.
+         * The video starts directly below the PhoneView toolbar.
+         */
+        double window_ratio =
+            window_size.height > 0
+                ? (double) window_size.width / window_size.height
+                : 0.0;
+        double content_ratio =
+            content_size.height > 0
+                ? (double) content_size.width / content_size.height
+                : 0.0;
+
+        rect->x = 0;
+        rect->y = 0;
+
+        if (window_ratio > content_ratio) {
+            rect->h = window_size.height;
+            rect->w = (float) window_size.height * content_ratio;
+        } else {
+            rect->w = window_size.width;
+            rect->h = (float) window_size.width / content_ratio;
+        }
+
         return;
     }
 
@@ -1058,8 +1085,12 @@ sc_screen_update_content_rect(struct sc_screen *screen) {
 
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
 
-    compute_content_rect(window_size, screen->content_size, is_icon,
-                         screen->render_fit, &screen->rect);
+    compute_content_rect(window_size,
+                         screen->content_size,
+                         is_icon,
+                         screen->render_fit,
+                         screen->phoneview.ui != NULL,
+                         &screen->rect);
 }
 
 // render the texture to the renderer
@@ -1316,9 +1347,18 @@ static void
 phoneview_set_window_size(struct sc_screen *screen,
                           struct sc_size video_size) {
     if (screen->phoneview.ui) {
-        sc_phoneview_ui_set_window_size(screen->phoneview.ui,
-                                        video_size.width,
-                                        video_size.height);
+        /*
+         * The GTK top-level window belongs to the user. After it is shown,
+         * content/orientation changes must resize only the embedded video
+         * child, not move or resize the outer desktop window.
+         */
+        if (!screen->window_shown) {
+            sc_phoneview_ui_set_window_size(screen->phoneview.ui,
+                                            video_size.width,
+                                            video_size.height);
+        } else {
+            sc_phoneview_ui_pump_events(screen->phoneview.ui);
+        }
     } else {
         sc_sdl_set_window_size(screen->window, video_size);
     }
