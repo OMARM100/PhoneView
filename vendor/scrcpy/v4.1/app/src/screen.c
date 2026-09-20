@@ -796,6 +796,8 @@ phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
             return true;
         }
 
+        sc_phoneview_ui_focus_video(screen->phoneview.ui);
+
         /*
          * Mouse-look owns the mouse for as long as the mapped button is held:
          * the cursor is invisible, movement is relative, and the cursor cannot
@@ -808,10 +810,12 @@ phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
 
         SDL_RaiseWindow(screen->window);
         SDL_SetWindowMouseGrab(screen->window, true);
+        SDL_CaptureMouse(true);
         SDL_HideCursor();
 
         if (!SDL_SetWindowRelativeMouseMode(screen->window, true)) {
             SDL_ShowCursor();
+            SDL_CaptureMouse(false);
             SDL_SetWindowMouseGrab(screen->window, false);
             LOGW("PhoneView Mouse Look: could not enable relative mouse mode: %s",
                  SDL_GetError());
@@ -835,6 +839,7 @@ phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
         screen->window, previous_relative);
 
     SDL_SetWindowMouseGrab(screen->window, false);
+    SDL_CaptureMouse(false);
 
     if (previous_visible) {
         SDL_ShowCursor();
@@ -980,14 +985,25 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
         const float look_gain = 2.5f * sensitivity;
 
-        if (event->xrel == 0.f && event->yrel == 0.f) {
+        float xrel = event->xrel;
+        float yrel = event->yrel;
+
+        if (xrel == 0.f && yrel == 0.f) {
+            float cached_x = 0.f;
+            float cached_y = 0.f;
+            (void) SDL_GetRelativeMouseState(&cached_x, &cached_y);
+            xrel = cached_x;
+            yrel = cached_y;
+        }
+
+        if (xrel == 0.f && yrel == 0.f) {
             continue;
         }
 
         control->runtime_x +=
-            event->xrel / MAX(1.f, screen->rect.w) * look_gain;
+            xrel / MAX(1.f, screen->rect.w) * look_gain;
         control->runtime_y +=
-            event->yrel / MAX(1.f, screen->rect.h) * look_gain;
+            yrel / MAX(1.f, screen->rect.h) * look_gain;
 
         control->runtime_x =
             SDL_clamp(control->runtime_x, 0.01f, 0.99f);
