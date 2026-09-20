@@ -448,6 +448,9 @@ phoneview_handle_mapped_wheel(struct sc_screen *screen,
 }
 
 static void
+sc_screen_render(struct sc_screen *screen, bool update_content_rect);
+
+static void
 phoneview_capture_keyboard(struct sc_screen *screen,
                            const SDL_KeyboardEvent *event) {
     if (screen->phoneview.count >= PHONEVIEW_MAX_CONTROLS) {
