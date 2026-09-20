@@ -772,16 +772,13 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
                 && !strcmp(control->key, name)) {
             handled = true;
 
-            if (key_down) {
-                if (!control->source_down) {
-                    control->source_down = true;
-                    (void) phoneview_set_look_control_active(
-                        screen, control, i, true);
-                }
-            } else {
-                control->source_down = false;
+            /* Press once = enter LOOK, press again = exit LOOK. */
+            if (key_down && !control->source_down) {
+                control->source_down = true;
                 (void) phoneview_set_look_control_active(
-                    screen, control, i, false);
+                    screen, control, i, !control->active);
+            } else if (!key_down) {
+                control->source_down = false;
             }
             continue;
         }
@@ -919,16 +916,13 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
     }
 
     if (look) {
-        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (!look->source_down) {
-                look->source_down = true;
-                (void) phoneview_set_look_control_active(
-                    screen, look, index, true);
-            }
-        } else {
-            look->source_down = false;
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN
+                && !look->source_down) {
+            look->source_down = true;
             (void) phoneview_set_look_control_active(
-                screen, look, index, false);
+                screen, look, index, !look->active);
+        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
+            look->source_down = false;
         }
 
         return true;
@@ -1013,7 +1007,7 @@ phoneview_handle_mouse_look_delta(struct sc_screen *screen,
          * moves across a normalized range, while sensitivity and speed act
          * as user-facing multipliers.
          */
-        float look_gain = 1.15f * sensitivity * speed;
+        float look_gain = 1.6f * sensitivity * speed;
 
         control->runtime_x +=
             xrel / MAX(1.f, screen->rect.w) * look_gain;
@@ -1884,6 +1878,10 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 break;
             case SDL_EVENT_MOUSE_MOTION:
                 if (screen->phoneview.mouse_look_relative_mode) {
+                    (void) phoneview_handle_mouse_look_delta(
+                        screen,
+                        event->motion.xrel,
+                        event->motion.yrel);
                     return true;
                 }
                 break;
