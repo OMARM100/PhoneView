@@ -65,7 +65,7 @@ class DependencyChecker:
             return None
 
     def scrcpy_ok(self):
-        return ScrcpyInstaller.is_phoneview_build()
+        return ScrcpyInstaller.is_phoneview_build() and ScrcpyInstaller.build_is_current()
 
     def check(self):
         if self.platform.startswith("linux"):
