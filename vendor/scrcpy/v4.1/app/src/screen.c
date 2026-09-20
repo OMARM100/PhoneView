@@ -776,10 +776,12 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
                 if (!control->source_down) {
                     control->source_down = true;
                     (void) phoneview_set_look_control_active(
-                        screen, control, i, !control->active);
+                        screen, control, i, true);
                 }
             } else {
                 control->source_down = false;
+                (void) phoneview_set_look_control_active(
+                    screen, control, i, false);
             }
             continue;
         }
@@ -921,10 +923,12 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
             if (!look->source_down) {
                 look->source_down = true;
                 (void) phoneview_set_look_control_active(
-                    screen, look, index, !look->active);
+                    screen, look, index, true);
             }
         } else {
             look->source_down = false;
+            (void) phoneview_set_look_control_active(
+                screen, look, index, false);
         }
 
         return true;
@@ -1003,7 +1007,13 @@ phoneview_handle_mouse_look_delta(struct sc_screen *screen,
         float sensitivity =
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
         float speed = control->speed > 0.01f ? control->speed : 1.f;
-        float look_gain = 2.5f * sensitivity * speed;
+
+        /*
+         * Keep the response independent from window size. The touch point
+         * moves across a normalized range, while sensitivity and speed act
+         * as user-facing multipliers.
+         */
+        float look_gain = 1.15f * sensitivity * speed;
 
         control->runtime_x +=
             xrel / MAX(1.f, screen->rect.w) * look_gain;
@@ -1011,9 +1021,9 @@ phoneview_handle_mouse_look_delta(struct sc_screen *screen,
             yrel / MAX(1.f, screen->rect.h) * look_gain;
 
         control->runtime_x = SDL_clamp(
-            control->runtime_x, 0.01f, 0.99f);
+            control->runtime_x, 0.001f, 0.999f);
         control->runtime_y = SDL_clamp(
-            control->runtime_y, 0.01f, 0.99f);
+            control->runtime_y, 0.001f, 0.999f);
 
         (void) phoneview_push_touch_at(
             screen, control, i, AMOTION_EVENT_ACTION_MOVE,
