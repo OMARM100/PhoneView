@@ -772,7 +772,7 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
         if (event->button.button == SDL_BUTTON_RIGHT
                 && screen->phoneview.edit_mode) {
-            struct sc_size size = sc_sdl_get_window_size(screen->window);
+            struct sc_size size = phoneview_get_render_size(screen);
             int index = phoneview_hit_control(
                 screen, x, y, (float) size.width, (float) size.height);
             if (index >= 0) {
@@ -811,7 +811,7 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             return true;
         }
 
-        struct sc_size size = sc_sdl_get_window_size(screen->window);
+        struct sc_size size = phoneview_get_render_size(screen);
         float x = SDL_clamp(event->motion.x, 0.f, (float) size.width);
         float y = SDL_clamp(event->motion.y, 0.f, (float) size.height);
 
@@ -1078,12 +1078,32 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
     }
 }
 
+static struct sc_size
+phoneview_get_render_size(struct sc_screen *screen) {
+    struct sc_size size = {0, 0};
+
+    if (screen->phoneview.ui) {
+        int width = 0;
+        int height = 0;
+        sc_phoneview_ui_get_video_size(screen->phoneview.ui,
+                                       &width,
+                                       &height);
+        if (width > 0 && height > 0) {
+            size.width = (uint32_t) width;
+            size.height = (uint32_t) height;
+            return size;
+        }
+    }
+
+    return sc_sdl_get_window_size(screen->window);
+}
+
 static void
 sc_screen_update_content_rect(struct sc_screen *screen) {
     // Only upscale video frames, not icon
     bool is_icon = !screen->video || screen->disconnected;
 
-    struct sc_size window_size = sc_sdl_get_window_size(screen->window);
+    struct sc_size window_size = phoneview_get_render_size(screen);
 
     compute_content_rect(window_size,
                          screen->content_size,
@@ -1241,8 +1261,9 @@ event_watcher(void *data, SDL_Event *event) {
 
     if (event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED
             || event->type == SDL_EVENT_WINDOW_RESIZED) {
-        // In practice, it seems to always be called from the same thread in
-        // that specific case. Anyway, it's just a workaround.
+        if (screen->phoneview.ui) {
+            sc_phoneview_ui_pump_events(screen->phoneview.ui);
+        }
         sc_screen_on_resize(screen, &event->window);
     }
 
