@@ -76,6 +76,10 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
 int
 sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui);
 
+void
+sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
+                                    const char *status);
+
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
 
