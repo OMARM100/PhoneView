@@ -12,9 +12,19 @@
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
-#include <SDL3/SDL.h>
+#ifdef MIN
+# undef MIN
+#endif
+#ifdef MAX
+# undef MAX
+#endif
+#ifdef CLAMP
+# undef CLAMP
+#endif
 
 #include "util/log.h"
+
+#include <SDL3/SDL.h>
 
 #define PHONEVIEW_UI_TITLEBAR_HEIGHT 38
 #define PHONEVIEW_UI_TOOLBAR_HEIGHT 44
@@ -177,7 +187,8 @@ phoneview_ui_on_delete_event(GtkWidget *widget,
 }
 
 static bool
-phoneview_ui_asset_path(const char *filename,
+phoneview_ui_asset_path(const char *subpath,
+                        const char *filename,
                         char *out,
                         size_t out_size) {
     char executable[PATH_MAX];
@@ -202,13 +213,12 @@ phoneview_ui_asset_path(const char *filename,
     }
     *slash = '\0';
 
-    int written = snprintf(
-        out,
-        out_size,
-        "%s/share/icons/hicolor/scalable/apps/%s",
-        executable,
-        filename
-    );
+    int written = snprintf(out,
+                           out_size,
+                           "%s/share/%s/%s",
+                           executable,
+                           subpath,
+                           filename);
 
     return written > 0 && (size_t) written < out_size;
 }
@@ -225,6 +235,10 @@ phoneview_ui_set_skip_taskbar(Window xid) {
     Atom skip_taskbar = XInternAtom(display,
                                     "_NET_WM_STATE_SKIP_TASKBAR",
                                     False);
+    Atom skip_pager = XInternAtom(display,
+                                  "_NET_WM_STATE_SKIP_PAGER",
+                                  False);
+    Atom states[2] = { skip_taskbar, skip_pager };
 
     XChangeProperty(display,
                     xid,
@@ -232,8 +246,8 @@ phoneview_ui_set_skip_taskbar(Window xid) {
                     XA_ATOM,
                     32,
                     PropModeAppend,
-                    (unsigned char *) &skip_taskbar,
-                    1);
+                    (unsigned char *) states,
+                    2);
     XFlush(display);
 }
 
@@ -293,14 +307,18 @@ phoneview_ui_fit_initial_window(struct sc_phoneview_ui *ui,
         return;
     }
 
-    GdkScreen *screen = gtk_widget_get_screen(ui->window);
-    if (!screen) {
+    GdkDisplay *display = gtk_widget_get_display(ui->window);
+    if (!display) {
+        return;
+    }
+
+    GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+    if (!monitor) {
         return;
     }
 
     GdkRectangle workarea = {0};
-    gint monitor = gdk_screen_get_primary_monitor(screen);
-    gdk_screen_get_monitor_workarea(screen, monitor, &workarea);
+    gdk_monitor_get_workarea(monitor, &workarea);
 
     const int chrome_height =
         PHONEVIEW_UI_TITLEBAR_HEIGHT + PHONEVIEW_UI_TOOLBAR_HEIGHT;
@@ -356,21 +374,51 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
 }
 
 static void
-phoneview_ui_apply_icon(struct sc_phoneview_ui *ui) {
+phoneview_ui_apply_assets(struct sc_phoneview_ui *ui) {
     char icon_path[PATH_MAX];
-    if (!phoneview_ui_asset_path("phoneview.svg",
-                                 icon_path,
-                                 sizeof(icon_path))) {
+    if (phoneview_ui_asset_path(
+            "icons/hicolor/scalable/apps",
+            "phoneview.svg",
+            icon_path,
+            sizeof(icon_path))) {
+        gtk_window_set_icon_from_file(GTK_WINDOW(ui->window),
+                                      icon_path,
+                                      NULL);
+        gtk_image_set_from_file(GTK_IMAGE(ui->title_icon), icon_path);
+        gtk_image_set_pixel_size(GTK_IMAGE(ui->title_icon), 20);
+        gtk_widget_set_size_request(ui->title_icon, 20, 20);
+    } else {
+        LOGW("PhoneView UI: custom icon was not found");
+    }
+
+    char css_path[PATH_MAX];
+    if (!phoneview_ui_asset_path("phoneview",
+                                 "phoneview.css",
+                                 css_path,
+                                 sizeof(css_path))) {
+        LOGE("PhoneView UI: could not resolve phoneview.css");
         return;
     }
 
-    gtk_window_set_icon_from_file(GTK_WINDOW(ui->window),
-                                  icon_path,
-                                  NULL);
+    GtkCssProvider *provider = gtk_css_provider_new();
+    GError *error = NULL;
 
-    gtk_image_set_from_file(GTK_IMAGE(ui->title_icon), icon_path);
-    gtk_image_set_pixel_size(GTK_IMAGE(ui->title_icon), 22);
-    gtk_widget_set_size_request(ui->title_icon, 22, 22);
+    gtk_css_provider_load_from_path(provider, css_path, &error);
+    if (error) {
+        LOGE("PhoneView UI: failed to load CSS '%s': %s",
+             css_path,
+             error->message);
+        g_error_free(error);
+        g_object_unref(provider);
+        return;
+    }
+
+    GdkScreen *style_screen = gtk_widget_get_screen(ui->window);
+    gtk_style_context_add_provider_for_screen(
+        style_screen,
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
 }
 
 struct sc_phoneview_ui *
@@ -382,7 +430,6 @@ sc_phoneview_ui_create(const char *title,
                        sc_phoneview_ui_action_cb action_cb,
                        void *userdata) {
     (void) decorated;
-    (void) title;
 
     if (!gtk_init_check(NULL, NULL)) {
         LOGE("PhoneView UI: GTK could not initialize");
@@ -434,7 +481,8 @@ sc_phoneview_ui_create(const char *title,
 
     ui->title_icon = gtk_image_new();
     ui->title_label = gtk_label_new("PhoneView");
-    ui->title_project = gtk_label_new("Android Viewer");
+    ui->title_project =
+        gtk_label_new(title && title[0] ? title : "Android Viewer");
 
     gtk_widget_set_name(ui->title_label, "phoneview-title");
     gtk_widget_set_name(ui->title_project, "phoneview-project");
@@ -558,91 +606,6 @@ sc_phoneview_ui_create(const char *title,
                      G_CALLBACK(phoneview_ui_on_done),
                      ui);
 
-    GtkCssProvider *provider = gtk_css_provider_new();
-    const gchar *css =
-        "#phoneview-titlebar {"
-        " background: #0f141b;"
-        " border: none;"
-        " box-shadow: none;"
-        " min-height: 38px;"
-        " padding: 0 5px;"
-        "}"
-        "#phoneview-title {"
-        " color: #eef3f8;"
-        " font-weight: 700;"
-        " font-size: 12px;"
-        "}"
-        "#phoneview-project {"
-        " color: #7e8a99;"
-        " font-size: 10px;"
-        " margin-left: 2px;"
-        "}"
-        "#phoneview-titlebar button {"
-        " color: #aeb8c5;"
-        " background: transparent;"
-        " border: none;"
-        " border-radius: 4px;"
-        " font-size: 15px;"
-        " padding: 0;"
-        " margin: 0;"
-        "}"
-        "#phoneview-titlebar #phoneview-window-minimize:hover,"
-        "#phoneview-titlebar #phoneview-window-maximize:hover {"
-        " background: #29313c;"
-        " color: #ffffff;"
-        "}"
-        "#phoneview-titlebar #phoneview-window-close:hover {"
-        " background: #c94755;"
-        " color: #ffffff;"
-        "}"
-        "#phoneview-toolbar {"
-        " background: #171d25;"
-        " border: none;"
-        " border-bottom: 1px solid #252e39;"
-        " padding: 2px 5px;"
-        "}"
-        "#phoneview-toolbar toolitem {"
-        " padding: 0;"
-        "}"
-        "#phoneview-toolbar button {"
-        " color: #cbd5df;"
-        " background: transparent;"
-        " border: 1px solid transparent;"
-        " border-radius: 5px;"
-        " padding: 5px 9px;"
-        " margin: 2px 1px;"
-        " box-shadow: none;"
-        "}"
-        "#phoneview-toolbar button:hover {"
-        " background: #27313d;"
-        " border-color: #344150;"
-        "}"
-        "#phoneview-toolbar #phoneview-add-button {"
-        " color: #ffffff;"
-        " background: #2768d9;"
-        " border-color: #3f7ae7;"
-        "}"
-        "#phoneview-toolbar #phoneview-add-button:hover {"
-        " background: #3478eb;"
-        "}"
-        "#phoneview-toolbar #phoneview-done-button {"
-        " color: #a6e3bb;"
-        "}"
-        "#phoneview-toolbar #phoneview-status {"
-        " color: #7f8b99;"
-        " font-size: 10px;"
-        " padding: 0 10px;"
-        "}"
-        "#phoneview-video {"
-        " background: #05070a;"
-        "}";
-    gtk_css_provider_load_from_data(provider, css, -1, NULL);
-    gtk_style_context_add_provider_for_screen(
-        gtk_widget_get_screen(ui->window),
-        GTK_STYLE_PROVIDER(provider),
-        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-    g_object_unref(provider);
-
     ui->video_area = gtk_drawing_area_new();
     gtk_widget_set_name(ui->video_area, "phoneview-video");
     gtk_widget_set_hexpand(ui->video_area, TRUE);
@@ -660,7 +623,7 @@ sc_phoneview_ui_create(const char *title,
                      G_CALLBACK(phoneview_ui_on_video_allocate),
                      ui);
 
-    phoneview_ui_apply_icon(ui);
+    phoneview_ui_apply_assets(ui);
 
     gtk_widget_show_all(ui->window);
     gtk_widget_realize(ui->window);
@@ -682,6 +645,8 @@ sc_phoneview_ui_create(const char *title,
     }
 
     Window xid = gdk_x11_window_get_xid(ui->video_gdk_window);
+    gdk_window_set_skip_taskbar_hint(ui->video_gdk_window, TRUE);
+    gdk_window_set_skip_pager_hint(ui->video_gdk_window, TRUE);
     phoneview_ui_set_skip_taskbar(xid);
 
     SDL_PropertiesID props = SDL_CreateProperties();
