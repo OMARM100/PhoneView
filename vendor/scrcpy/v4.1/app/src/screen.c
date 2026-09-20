@@ -264,6 +264,7 @@ phoneview_save_controls(struct sc_screen *screen) {
         fprintf(file,
                 "  {\"label\":\"%s\",\"key\":\"%s\","
                 "\"type\":\"%s\",\"x\":%.5f,\"y\":%.5f,"
+                "\"size\":%.5f,\"sensitivity\":%.5f,"
                 "\"behavior\":\"%s\"",
                 control->label,
                 control->key,
