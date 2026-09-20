@@ -5,6 +5,16 @@
 #include <stdint.h>
 #include <SDL3/SDL_video.h>
 
+enum sc_phoneview_add_type {
+    SC_PHONEVIEW_ADD_KEYBOARD,
+    SC_PHONEVIEW_ADD_TAP,
+    SC_PHONEVIEW_ADD_TOGGLE,
+    SC_PHONEVIEW_ADD_MOUSE,
+    SC_PHONEVIEW_ADD_LOOK,
+    SC_PHONEVIEW_ADD_WHEEL,
+    SC_PHONEVIEW_ADD_JOYSTICK,
+};
+
 enum sc_phoneview_ui_action {
     SC_PHONEVIEW_UI_ACTION_EDIT,
     SC_PHONEVIEW_UI_ACTION_ADD,
@@ -62,6 +72,9 @@ sc_phoneview_ui_set_edit_mode(struct sc_phoneview_ui *ui,
 void
 sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
                                  bool capture_mode);
+
+int
+sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui);
 
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
