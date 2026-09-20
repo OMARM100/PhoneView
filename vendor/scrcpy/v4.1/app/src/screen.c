@@ -316,9 +316,8 @@ phoneview_push_touch(struct sc_screen *screen,
         return false;
     }
 
-    struct sc_size window_size = sc_sdl_get_window_size(screen->window);
-    float wx = control->x * (float) window_size.width;
-    float wy = control->y * (float) window_size.height;
+    float wx = screen->rect.x + control->x * screen->rect.w;
+    float wy = screen->rect.y + control->y * screen->rect.h;
 
     struct sc_point point =
         sc_screen_convert_window_to_frame_coords(screen, (int32_t) wx,
@@ -606,17 +605,22 @@ phoneview_render_controls(struct sc_screen *screen) {
         return;
     }
 
-    struct sc_size size = sc_sdl_get_window_size(screen->window);
-    float width = (float) size.width;
-    float height = (float) size.height;
+    float origin_x = screen->rect.x;
+    float origin_y = screen->rect.y;
+    float width = screen->rect.w;
+    float height = screen->rect.h;
+
+    if (width <= 0.f || height <= 0.f) {
+        return;
+    }
 
     if (screen->phoneview.capture_mode) {
         SDL_SetRenderDrawBlendMode(screen->renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(screen->renderer, 0, 0, 0, 82);
 
         SDL_FRect overlay = {
-            .x = 0.f,
-            .y = 0.f,
+            .x = origin_x,
+            .y = origin_y,
             .w = width,
             .h = height,
         };
@@ -627,11 +631,17 @@ phoneview_render_controls(struct sc_screen *screen) {
         const struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
 
-        float bx = control->x * width - PHONEVIEW_CONTROL_W / 2.f;
-        float by = control->y * height - PHONEVIEW_CONTROL_H / 2.f;
+        float bx = origin_x + control->x * width
+                 - PHONEVIEW_CONTROL_W / 2.f;
+        float by = origin_y + control->y * height
+                 - PHONEVIEW_CONTROL_H / 2.f;
 
-        bx = SDL_clamp(bx, 0.f, MAX(0.f, width - PHONEVIEW_CONTROL_W));
-        by = SDL_clamp(by, 0.f, MAX(0.f, height - PHONEVIEW_CONTROL_H));
+        bx = SDL_clamp(bx,
+                       origin_x,
+                       origin_x + MAX(0.f, width - PHONEVIEW_CONTROL_W));
+        by = SDL_clamp(by,
+                       origin_y,
+                       origin_y + MAX(0.f, height - PHONEVIEW_CONTROL_H));
 
         phoneview_draw_box(screen->renderer,
                            bx, by,
@@ -775,9 +785,11 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
         if (event->button.button == SDL_BUTTON_RIGHT
                 && screen->phoneview.edit_mode) {
-            struct sc_size size = phoneview_get_render_size(screen);
+            float local_x = x - screen->rect.x;
+            float local_y = y - screen->rect.y;
             int index = phoneview_hit_control(
-                screen, x, y, (float) size.width, (float) size.height);
+                screen, local_x, local_y,
+                screen->rect.w, screen->rect.h);
             if (index >= 0) {
                 for (size_t i = (size_t) index;
                      i + 1 < screen->phoneview.count; ++i) {
@@ -793,9 +805,11 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
         if (event->button.button == SDL_BUTTON_LEFT
                 && screen->phoneview.edit_mode) {
-            struct sc_size size = phoneview_get_render_size(screen);
+            float local_x = x - screen->rect.x;
+            float local_y = y - screen->rect.y;
             int index = phoneview_hit_control(
-                screen, x, y, (float) size.width, (float) size.height);
+                screen, local_x, local_y,
+                screen->rect.w, screen->rect.h);
             if (index >= 0) {
                 screen->phoneview.dragging = true;
                 screen->phoneview.drag_index = index;
@@ -814,17 +828,20 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             return true;
         }
 
-        struct sc_size size = phoneview_get_render_size(screen);
-        float x = SDL_clamp(event->motion.x, 0.f, (float) size.width);
-        float y = SDL_clamp(event->motion.y, 0.f, (float) size.height);
+        float x = event->motion.x - screen->rect.x;
+        float y = event->motion.y - screen->rect.y;
+        x = SDL_clamp(x, 0.f, screen->rect.w);
+        y = SDL_clamp(y, 0.f, screen->rect.h);
 
         if (screen->phoneview.drag_index >= 0
                 && (size_t) screen->phoneview.drag_index < screen->phoneview.count) {
             struct sc_phoneview_control *control =
                 &screen->phoneview.controls[screen->phoneview.drag_index];
 
-            control->x = SDL_clamp(x / MAX(1.f, (float) size.width), 0.f, 1.f);
-            control->y = SDL_clamp(y / MAX(1.f, (float) size.height), 0.f, 1.f);
+            control->x = SDL_clamp(
+                x / MAX(1.f, screen->rect.w), 0.f, 1.f);
+            control->y = SDL_clamp(
+                y / MAX(1.f, screen->rect.h), 0.f, 1.f);
         }
         return true;
     }
@@ -1028,8 +1045,9 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
         return;
     } else if (phoneview) {
         /*
-         * Preserve the Android aspect ratio without centering it vertically.
-         * The video starts directly below the PhoneView toolbar.
+         * Preserve the Android aspect ratio and center it in the
+         * resizable PhoneView video area. The unused area stays opaque
+         * black instead of exposing the GTK background.
          */
         double window_ratio =
             window_size.height > 0
@@ -1040,9 +1058,6 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
                 ? (double) content_size.width / content_size.height
                 : 0.0;
 
-        rect->x = 0;
-        rect->y = 0;
-
         if (window_ratio > content_ratio) {
             rect->h = window_size.height;
             rect->w = (float) window_size.height * content_ratio;
@@ -1050,6 +1065,9 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
             rect->w = window_size.width;
             rect->h = (float) window_size.width / content_ratio;
         }
+
+        rect->x = ((float) window_size.width - rect->w) / 2.f;
+        rect->y = ((float) window_size.height - rect->h) / 2.f;
 
         return;
     }
@@ -1083,17 +1101,9 @@ compute_content_rect(struct sc_size window_size, struct sc_size content_size,
 
 static struct sc_size
 phoneview_get_render_size(struct sc_screen *screen) {
-    struct sc_size size = {0, 0};
-
     if (screen->phoneview.ui) {
         int width = 0;
         int height = 0;
-        if (SDL_GetRenderOutputSize(screen->renderer, &width, &height)
-                && width > 0 && height > 0) {
-            size.width = (uint32_t) width;
-            size.height = (uint32_t) height;
-            return size;
-        }
 
         sc_phoneview_ui_get_video_size(screen->phoneview.ui,
                                        &width,
@@ -1103,8 +1113,24 @@ phoneview_get_render_size(struct sc_screen *screen) {
             if (density <= 0.f) {
                 density = 1.f;
             }
-            size.width = (uint32_t) (width * density);
-            size.height = (uint32_t) (height * density);
+
+            struct sc_size size = {
+                .width = (uint32_t) (width * density),
+                .height = (uint32_t) (height * density),
+            };
+            return size;
+        }
+
+        int output_width = 0;
+        int output_height = 0;
+        if (SDL_GetRenderOutputSize(screen->renderer,
+                                    &output_width,
+                                    &output_height)
+                && output_width > 0 && output_height > 0) {
+            struct sc_size size = {
+                .width = (uint32_t) output_width,
+                .height = (uint32_t) output_height,
+            };
             return size;
         }
     }
@@ -1141,7 +1167,7 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
 
     SDL_Renderer *renderer = screen->renderer;
     struct sc_screen_bg_color bg = screen->bg;
-    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 0);
+    SDL_SetRenderDrawColor(renderer, bg.r, bg.g, bg.b, 255);
     sc_sdl_render_clear(renderer);
 
     SDL_Texture *texture = screen->tex.texture;
@@ -1235,6 +1261,11 @@ static void
 sc_screen_on_resize(struct sc_screen *screen, const SDL_WindowEvent *event) {
     // This event can be triggered before the window is shown
     if (!screen->window_shown) {
+        return;
+    }
+
+    if (screen->phoneview.ui) {
+        sc_screen_render(screen, true);
         return;
     }
 
