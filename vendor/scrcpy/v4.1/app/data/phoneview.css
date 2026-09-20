@@ -274,3 +274,48 @@
 #phoneview-capture-dim {
     background-color: rgba(0, 0, 0, 0.65);
 }
+
+
+/* --------------------------------------------------------------------------
+   Edit-mode control actions
+   -------------------------------------------------------------------------- */
+
+#phoneview-toolbar #phoneview-duplicate-button {
+    color: #dbeafe;
+    background-color: #26384d;
+    border-color: #3d5878;
+}
+
+#phoneview-toolbar #phoneview-duplicate-button:hover {
+    color: #ffffff;
+    background-color: #315171;
+    border-color: #527aa4;
+}
+
+#phoneview-toolbar #phoneview-delete-button {
+    color: #ffb4b4;
+    background-color: #43272a;
+    border-color: #6a3b40;
+}
+
+#phoneview-toolbar #phoneview-delete-button:hover {
+    color: #ffd0d0;
+    background-color: #5b3035;
+    border-color: #834a51;
+}
+
+#phoneview-toolbar #phoneview-delete-button:active {
+    background-color: #351f22;
+}
+
+#phoneview-toolbar #phoneview-add-button {
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+#phoneview-editor-heading {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
