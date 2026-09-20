@@ -208,7 +208,13 @@ class ScrcpyInstaller:
 
         target_root = ScrcpyInstaller.target_root()
         target_binary = target_root / "bin" / "scrcpy"
-        if target_binary.is_file() and os.access(target_binary, os.X_OK):
+        target_server = target_root / "share" / "scrcpy" / "scrcpy-server"
+        if (
+            target_binary.is_file()
+            and os.access(target_binary, os.X_OK)
+            and target_server.is_file()
+            and target_server.stat().st_size > 0
+        ):
             BIN_ROOT.mkdir(parents=True, exist_ok=True)
             link = BIN_ROOT / "scrcpy-phoneview"
             if link.is_symlink() or link.exists():
@@ -218,6 +224,10 @@ class ScrcpyInstaller:
             set_progress(100)
             return str(target_binary)
 
+        if target_root.exists():
+            emit("↓ Existing PhoneView scrcpy installation is incomplete; rebuilding it.")
+            shutil.rmtree(target_root)
+
         INSTALL_ROOT.mkdir(parents=True, exist_ok=True)
         BIN_ROOT.mkdir(parents=True, exist_ok=True)
         env = os.environ.copy()
@@ -226,7 +236,6 @@ class ScrcpyInstaller:
             temp_root = Path(temp)
             source_root = temp_root / "source"
             build_root = temp_root / "build"
-            install_root = temp_root / "install"
             server_file = temp_root / "scrcpy-server"
 
             emit(f"Using vendored scrcpy {PHONEVIEW_SCRCPY_VERSION} source.")
@@ -256,7 +265,7 @@ class ScrcpyInstaller:
             emit("✓ Matching scrcpy-server checksum verified.")
             set_progress(40)
 
-            install_root.mkdir()
+            target_root.mkdir(parents=True, exist_ok=True)
             ScrcpyInstaller._run(
                 [
                     "meson",
@@ -268,7 +277,7 @@ class ScrcpyInstaller:
                     "-Dv4l2=false",
                     "-Dusb=false",
                     f"-Dprebuilt_server={server_file}",
-                    f"--prefix={install_root}",
+                    f"--prefix={target_root}",
                 ],
                 cwd=source_root,
                 env=env,
@@ -292,10 +301,6 @@ class ScrcpyInstaller:
                 env=env,
                 emit=emit,
             )
-
-            if target_root.exists():
-                shutil.rmtree(target_root)
-            shutil.copytree(install_root, target_root)
 
             if local_sdl_install and local_sdl_install.is_dir():
                 target_lib = target_root / "lib"
