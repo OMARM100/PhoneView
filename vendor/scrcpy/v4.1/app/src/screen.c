@@ -528,6 +528,8 @@ phoneview_capture_mouse(struct sc_screen *screen, uint8_t button) {
 
     screen->phoneview.capture_mode = false;
     phoneview_save_controls(screen);
+    sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
+    sc_screen_render(screen, false);
 }
 
 static void
@@ -606,6 +608,19 @@ phoneview_render_controls(struct sc_screen *screen) {
     float width = (float) size.width;
     float height = (float) size.height;
 
+    if (screen->phoneview.capture_mode) {
+        SDL_SetRenderDrawBlendMode(screen->renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(screen->renderer, 0, 0, 0, 82);
+
+        SDL_FRect overlay = {
+            .x = 0.f,
+            .y = 0.f,
+            .w = width,
+            .h = height,
+        };
+        SDL_RenderFillRect(screen->renderer, &overlay);
+    }
+
     for (size_t i = 0; i < screen->phoneview.count; ++i) {
         const struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
@@ -653,6 +668,13 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             screen->phoneview.dragging = false;
             screen->phoneview.drag_index = -1;
             sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, true);
+            sc_screen_render(screen, false);
+            break;
+
+        case SC_PHONEVIEW_UI_ACTION_SAVE:
+            if (screen->phoneview.edit_mode) {
+                phoneview_save_controls(screen);
+            }
             break;
 
         case SC_PHONEVIEW_UI_ACTION_DONE:
