@@ -212,6 +212,8 @@ install_data('data/disconnected.png',
              install_dir: datadir / 'icons/hicolor/256x256/apps')
 install_data('data/phoneview.svg',
              install_dir: datadir / 'icons/hicolor/scalable/apps')
+install_data('data/phoneview.css',
+             install_dir: datadir / 'phoneview')
 install_data('data/zsh-completion/_scrcpy',
              install_dir: datadir / 'zsh/site-functions')
 install_data('data/bash-completion/scrcpy',
