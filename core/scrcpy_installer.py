@@ -252,6 +252,13 @@ class ScrcpyInstaller:
                 shutil.rmtree(target_root)
             shutil.copytree(install_root, target_root)
 
+            upstream_license = source_root / "LICENSE"
+            if upstream_license.is_file():
+                shutil.copy2(
+                    upstream_license,
+                    target_root / "SCRCPY-LICENSE.txt",
+                )
+
         target_binary = target_root / "bin" / "scrcpy"
         if not target_binary.is_file():
             raise RuntimeError(
