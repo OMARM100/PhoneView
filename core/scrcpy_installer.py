@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 PHONEVIEW_SCRCPY_VERSION = "v4.1"
-PHONEVIEW_BUILD_NAME = "v4.1-phoneview-toolbar"
+PHONEVIEW_BUILD_NAME = "v4.1-phoneview-native-toolbar"
 
 INSTALL_ROOT = Path.home() / ".local" / "share" / "phoneview" / "scrcpy"
 BIN_ROOT = Path.home() / ".local" / "bin"
@@ -208,6 +208,26 @@ class ScrcpyInstaller:
         for command in ("python3", "meson", "ninja", "gcc", "pkg-config", "tar"):
             ScrcpyInstaller._require_command(command)
 
+        try:
+            gtk_check = subprocess.run(
+                ["pkg-config", "--atleast-version=3.20", "gtk+-3.0"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env=os.environ.copy(),
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(
+                "Could not check GTK3 development files with pkg-config."
+            ) from exc
+
+        if gtk_check.returncode != 0:
+            raise RuntimeError(
+                "PhoneView's native toolbar requires GTK3 development files. "
+                "Install the package providing gtk+-3.0 (for example libgtk-3-dev) "
+                "then run setup again."
+            )
+
         if not VENDORED_ROOT.is_dir():
             raise RuntimeError(f"Vendored scrcpy source was not found at: {VENDORED_ROOT}")
 
@@ -216,6 +236,8 @@ class ScrcpyInstaller:
             VENDORED_ROOT / "app" / "meson.build",
             VENDORED_ROOT / "app" / "src" / "screen.c",
             VENDORED_ROOT / "app" / "src" / "screen.h",
+            VENDORED_ROOT / "app" / "src" / "phoneview_ui.c",
+            VENDORED_ROOT / "app" / "src" / "phoneview_ui.h",
             VENDORED_ROOT / "server" / "meson.build",
         )
         missing = [str(p) for p in required_source if not p.is_file()]
