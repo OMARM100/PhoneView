@@ -373,7 +373,7 @@ class SetupWindow(QDialog):
 
         # scrcpy is deliberately installed outside apt. Ubuntu/Debian repositories
         # may ship an obsolete release, so PhoneView uses the official stable archive.
-        if "scrcpy" in packages:
+        if "phoneview-scrcpy" in packages:
             self.installing = True
             self.cancelling = False
             self.current_packages = packages
@@ -382,15 +382,16 @@ class SetupWindow(QDialog):
             self.cancel_button.setEnabled(True)
             self.continue_button.setEnabled(False)
 
-            self.set_row("scrcpy", "Downloading official release", "↓", "#2979FF")
-            self.status.setText("Updating scrcpy")
+            self.set_row("scrcpy", "Building pinned PhoneView engine", "↓", "#2979FF")
+            self.status.setText("Building PhoneView scrcpy")
             self.detail.setText(
-                "Downloading the latest stable Linux x86_64 release from the official scrcpy repository."
+                "Building the pinned scrcpy 4.1 source with PhoneView's mapping editor patch. "
+                "Newer upstream releases are intentionally ignored."
             )
-            self.set_progress(18, "Checking the latest stable scrcpy release...")
-            self.write_log("Automatic scrcpy update started.")
-            self.write_log("Source: official Genymobile/scrcpy GitHub release.")
-            self.write_log("APT will not be used for scrcpy because Ubuntu/Debian may provide an obsolete version.")
+            self.set_progress(18, "Preparing the pinned scrcpy 4.1 build...")
+            self.write_log("PhoneView scrcpy build started.")
+            self.write_log("Pinned source: Genymobile/scrcpy v4.1.")
+            self.write_log("Automatic upstream scrcpy updates are disabled.")
 
             self.process = QProcess(self)
             self.process.setProcessChannelMode(QProcess.MergedChannels)
@@ -486,9 +487,9 @@ class SetupWindow(QDialog):
             )
             return
 
-        self.write_log("✓ Official stable scrcpy passed final verification.")
+        self.write_log("✓ Pinned PhoneView scrcpy 4.1 build passed final verification.")
         self.set_row("scrcpy", "Ready", "✓", "#4CAF50")
-        self.set_progress(92, "scrcpy is ready. Checking remaining system components...")
+        self.set_progress(92, "PhoneView scrcpy is ready. Checking remaining system components...")
 
         remaining = [
             item for item in items
@@ -507,7 +508,7 @@ class SetupWindow(QDialog):
             )
             return
 
-        # Re-enter the existing system-package installer for ADB/XCB.
+        # Continue with any remaining system packages such as XCB/X11 helpers.
         self.current_packages = [item["package"] for item in remaining if item.get("package")]
         self.start_install()
 
@@ -778,6 +779,7 @@ class SetupWindow(QDialog):
         return {
             "adb": "adb",
             "scrcpy": "scrcpy",
+            "phoneview-scrcpy": "scrcpy",
             "libxcb-cursor0": "xcb",
             "wmctrl": "wmctrl",
             "xdotool": "xdotool",
