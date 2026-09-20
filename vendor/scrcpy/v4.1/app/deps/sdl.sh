@@ -46,6 +46,9 @@ else
         conf+=(
             -DSDL_WAYLAND=ON
             -DSDL_X11=ON
+            # XScreenSaver is optional for PhoneView/scrcpy and is not required
+            # for the desktop presentation/control path.
+            -DSDL_X11_XSCRNSAVER=OFF
         )
     fi
 
