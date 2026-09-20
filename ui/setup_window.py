@@ -344,9 +344,8 @@ class SetupWindow(QDialog):
         ):
             self.status.setText("Preparing automatic installation")
             self.detail.setText(
-                "PhoneView will install the official stable scrcpy release directly "
-                "from the official project when scrcpy is missing or obsolete. "
-                "System packages, when needed, use the normal operating-system authorization dialog."
+                "PhoneView installs the required system packages, then builds its pinned "
+                "scrcpy 4.1 engine with the integrated mapping editor."
             )
             self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
             self.install_timer = QTimer(self)
@@ -365,17 +364,16 @@ class SetupWindow(QDialog):
         if self.process is not None or self.cancelling:
             return
 
-        packages = [
-            package
-            for package in self.checker.missing_linux_packages()
-            if package != "phoneview-scrcpy"
-        ]
+        packages = self.checker.missing_linux_packages()
         if not packages:
             self.run_check()
             return
 
         self.pending_scrcpy_build = "phoneview-scrcpy" in packages
-        system_packages = [package for package in packages if package != "phoneview-scrcpy"]
+        system_packages = [
+            package for package in packages
+            if package != "phoneview-scrcpy"
+        ]
 
         self.installing = True
         self.cancelling = False
@@ -494,7 +492,7 @@ class SetupWindow(QDialog):
         if not scrcpy_item["ok"]:
             self.fail_setup(
                 "scrcpy verification failed",
-                "The official installer finished, but PhoneView could not verify a usable scrcpy release.",
+                "The pinned PhoneView scrcpy build finished, but the engine could not be verified.",
                 1,
             )
             return
@@ -515,12 +513,12 @@ class SetupWindow(QDialog):
         if not self.pkexec_path():
             self.fail_setup(
                 "System components still need authorization",
-                "scrcpy is updated successfully, but the remaining system packages require pkexec.",
+                "The pinned scrcpy engine is ready, but remaining system packages require pkexec.",
                 1,
             )
             return
 
-        # Continue with any remaining system packages such as XCB/X11 helpers.
+        # Continue with any remaining system packages such as XCB.
         self.current_packages = [item["package"] for item in remaining if item.get("package")]
         self.start_install()
 
@@ -662,7 +660,11 @@ class SetupWindow(QDialog):
             return
 
         self.write_log("✓ Package lists updated successfully.")
-        packages = self.checker.missing_linux_packages()
+        packages = [
+            package
+            for package in self.checker.missing_linux_packages()
+            if package != "phoneview-scrcpy"
+        ]
         if not packages:
             self.cleanup_process()
             self.run_check()
