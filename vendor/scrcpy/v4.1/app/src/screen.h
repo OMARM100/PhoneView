@@ -64,6 +64,8 @@ struct sc_phoneview_state {
     bool capture_mode;
     bool dragging;
     bool resizing;
+    bool mouse_look_relative_mode;
+    bool mouse_look_previous_relative_mode;
     int capture_stage;
     int drag_index;
     int resize_index;
