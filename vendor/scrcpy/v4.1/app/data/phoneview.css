@@ -2,9 +2,13 @@
    PhoneView GTK Desktop Theme
    ========================================================================== */
 
-/* --- Header Bar (Title Bar) --- */
+/* --------------------------------------------------------------------------
+   Header / Title Bar
+   -------------------------------------------------------------------------- */
+
 #phoneview-titlebar {
     background-color: #1e1e1e;
+    background-image: none;
     border-bottom: 1px solid #000000;
     box-shadow: none;
     min-height: 40px;
@@ -24,32 +28,55 @@
     margin-left: 8px;
 }
 
-/* Window Controls (Minimize, Maximize, Close) */
+/* Window controls */
+
 #phoneview-titlebar button {
     color: #b0b0b0;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid transparent;
+    border-radius: 5px;
     font-size: 14px;
     min-width: 32px;
     min-height: 28px;
     padding: 0;
     margin: 0 2px;
+    box-shadow: none;
+    -gtk-icon-shadow: none;
 }
 
 #phoneview-titlebar button:hover {
-    background-color: #333333;
     color: #ffffff;
+    background-color: #333333;
+    background-image: none;
+    border-color: #444444;
+}
+
+#phoneview-titlebar button:active {
+    color: #ffffff;
+    background-color: #404040;
+    background-image: none;
 }
 
 #phoneview-titlebar #phoneview-window-close:hover {
-    background-color: #e81123;
     color: #ffffff;
+    background-color: #e81123;
+    background-image: none;
+    border-color: #e81123;
 }
 
-/* --- Toolbar --- */
+#phoneview-titlebar #phoneview-window-close:active {
+    background-color: #c50f1f;
+    border-color: #c50f1f;
+}
+
+/* --------------------------------------------------------------------------
+   Main Toolbar
+   -------------------------------------------------------------------------- */
+
 #phoneview-toolbar {
     background-color: #252526;
+    background-image: none;
     border-top: 1px solid #3e3e42;
     border-bottom: 1px solid #1c1c1c;
     padding: 6px 8px;
@@ -58,69 +85,154 @@
 
 #phoneview-toolbar toolitem {
     padding: 0;
+    background-image: none;
 }
 
-/* Normal Toolbar Buttons */
+/* Base button */
+
 #phoneview-toolbar button {
-    color: #cccccc;
-    background: transparent;
-    border: 1px solid transparent;
+    color: #d4d4d4;
+    background-color: #2d2d30;
+    background-image: none;
+    border: 1px solid #3e3e42;
     border-radius: 6px;
     padding: 6px 12px;
     margin: 0 4px;
     font-weight: 600;
     font-size: 12px;
+    box-shadow: none;
+    -gtk-icon-shadow: none;
 }
 
 #phoneview-toolbar button:hover {
-    background-color: #3e3e42;
-    border-color: #4a4a4f;
     color: #ffffff;
+    background-color: #3e3e42;
+    background-image: none;
+    border-color: #56565c;
+    box-shadow: none;
 }
 
 #phoneview-toolbar button:active {
-    background-color: #1e1e1e;
-    border-color: #000000;
+    color: #ffffff;
+    background-color: #1f1f21;
+    background-image: none;
+    border-color: #5c5c63;
 }
 
-/* Edit Mode Buttons */
-#phoneview-toolbar #phoneview-add-button {
-    background-color: #007acc;
-    border-color: #007acc;
+#phoneview-toolbar button:focus {
     color: #ffffff;
+    background-image: none;
+    outline: none;
+    box-shadow: none;
+}
+
+/* --------------------------------------------------------------------------
+   Normal / Edit button
+   -------------------------------------------------------------------------- */
+
+#phoneview-toolbar #phoneview-edit-button {
+    color: #d8dee9;
+    background-color: #303238;
+    border-color: #4a4c53;
+}
+
+#phoneview-toolbar #phoneview-edit-button:hover {
+    color: #ffffff;
+    background-color: #3b3e46;
+    border-color: #60636c;
+}
+
+#phoneview-toolbar #phoneview-edit-button:active {
+    background-color: #26282d;
+}
+
+/* --------------------------------------------------------------------------
+   Add Button - primary action
+   -------------------------------------------------------------------------- */
+
+#phoneview-toolbar #phoneview-add-button {
+    color: #ffffff;
+    background-color: #0078d4;
+    background-image: none;
+    border-color: #1687df;
 }
 
 #phoneview-toolbar #phoneview-add-button:hover {
-    background-color: #0098ff;
-    border-color: #0098ff;
+    color: #ffffff;
+    background-color: #1687df;
+    border-color: #3097e7;
 }
 
 #phoneview-toolbar #phoneview-add-button:active {
+    color: #ffffff;
     background-color: #005a9e;
+    border-color: #005a9e;
 }
 
+#phoneview-toolbar #phoneview-add-button:focus {
+    background-color: #0078d4;
+    border-color: #4aa9ee;
+}
+
+/* --------------------------------------------------------------------------
+   Save
+   -------------------------------------------------------------------------- */
+
 #phoneview-toolbar #phoneview-save-button {
-    color: #ffffff;
-    background-color: #2b2b2b;
-    border-color: #3e3e42;
+    color: #e6edf5;
+    background-color: #303238;
+    background-image: none;
+    border-color: #4a4c53;
 }
 
 #phoneview-toolbar #phoneview-save-button:hover {
-    background-color: #3e3e42;
+    color: #ffffff;
+    background-color: #3b3e46;
+    border-color: #60636c;
 }
 
+#phoneview-toolbar #phoneview-save-button:active {
+    background-color: #25272c;
+}
+
+/* --------------------------------------------------------------------------
+   Done - success action
+   -------------------------------------------------------------------------- */
+
 #phoneview-toolbar #phoneview-done-button {
-    color: #4CAF50;
-    background-color: #2b2b2b;
-    border-color: #3e3e42;
+    color: #74d99a;
+    background-color: #26312a;
+    background-image: none;
+    border-color: #3e6348;
 }
 
 #phoneview-toolbar #phoneview-done-button:hover {
-    background-color: #3e3e42;
-    color: #66BB6A;
+    color: #a0efba;
+    background-color: #314438;
+    border-color: #4e805b;
 }
 
-/* Status Label in Toolbar */
+#phoneview-toolbar #phoneview-done-button:active {
+    color: #8be6a8;
+    background-color: #202a24;
+}
+
+/* --------------------------------------------------------------------------
+   Toolbar icons / labels
+   -------------------------------------------------------------------------- */
+
+#phoneview-toolbar button image {
+    color: inherit;
+    opacity: 1;
+    -gtk-icon-shadow: none;
+}
+
+#phoneview-toolbar button label {
+    color: inherit;
+}
+
+/* Status */
+
 #phoneview-toolbar #phoneview-status {
     color: #858585;
     font-size: 11px;
@@ -128,16 +240,15 @@
     padding: 0 12px;
 }
 
-/* --- Android Video Area --- */
+/* --------------------------------------------------------------------------
+   Android video
+   -------------------------------------------------------------------------- */
+
 #phoneview-video {
     background-color: #000000;
 }
 
-/* --- Capture Mode Overlay ---
-   This ID is reserved for GTK-side styling if it is needed later.
-   The active dim layer is rendered by SDL so it can cover the embedded
-   Android video surface reliably.
-*/
+/* Reserved GTK-side capture styling */
 #phoneview-capture-dim {
     background-color: rgba(0, 0, 0, 0.65);
 }
