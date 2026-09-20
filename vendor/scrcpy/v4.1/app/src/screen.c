@@ -790,7 +790,7 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
         if (event->button.button == SDL_BUTTON_LEFT
                 && screen->phoneview.edit_mode) {
-            struct sc_size size = sc_sdl_get_window_size(screen->window);
+            struct sc_size size = phoneview_get_render_size(screen);
             int index = phoneview_hit_control(
                 screen, x, y, (float) size.width, (float) size.height);
             if (index >= 0) {
@@ -1085,12 +1085,23 @@ phoneview_get_render_size(struct sc_screen *screen) {
     if (screen->phoneview.ui) {
         int width = 0;
         int height = 0;
+        if (SDL_GetRenderOutputSize(screen->renderer, &width, &height)
+                && width > 0 && height > 0) {
+            size.width = (uint32_t) width;
+            size.height = (uint32_t) height;
+            return size;
+        }
+
         sc_phoneview_ui_get_video_size(screen->phoneview.ui,
                                        &width,
                                        &height);
         if (width > 0 && height > 0) {
-            size.width = (uint32_t) width;
-            size.height = (uint32_t) height;
+            float density = SDL_GetWindowPixelDensity(screen->window);
+            if (density <= 0.f) {
+                density = 1.f;
+            }
+            size.width = (uint32_t) (width * density);
+            size.height = (uint32_t) (height * density);
             return size;
         }
     }
@@ -1137,18 +1148,28 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
 
     float scale = SDL_GetWindowPixelDensity(screen->window);
     if (scale == 0) {
-        // Just in case, but in practice the function can only fail when window
-        // is invalid
-        LOGE("Cannot get scale value: %s", SDL_GetError());
         scale = 1;
     }
 
-    SDL_FRect geometry = {
-        .x = screen->rect.x * scale,
-        .y = screen->rect.y * scale,
-        .w = screen->rect.w * scale,
-        .h = screen->rect.h * scale,
-    };
+    SDL_FRect geometry;
+    if (screen->phoneview.ui) {
+        struct sc_size render_size = phoneview_get_render_size(screen);
+        SDL_FRect phone_rect = {0};
+        compute_content_rect(render_size,
+                             screen->content_size,
+                             false,
+                             screen->render_fit,
+                             true,
+                             &phone_rect);
+        geometry = phone_rect;
+    } else {
+        geometry = (SDL_FRect) {
+            .x = screen->rect.x * scale,
+            .y = screen->rect.y * scale,
+            .w = screen->rect.w * scale,
+            .h = screen->rect.h * scale,
+        };
+    }
     enum sc_orientation orientation = screen->orientation;
 
     bool ok = false;
