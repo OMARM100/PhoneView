@@ -774,11 +774,12 @@ sc_phoneview_ui_set_window_size(struct sc_phoneview_ui *ui,
         return;
     }
 
-    gtk_window_resize(GTK_WINDOW(ui->window),
-                      video_width,
-                      video_height
-                      + PHONEVIEW_UI_TITLEBAR_HEIGHT
-                      + PHONEVIEW_UI_TOOLBAR_HEIGHT);
+    /*
+     * scrcpy may request a portrait window larger than the current monitor.
+     * Fit the requested video dimensions to the available work area while
+     * preserving the phone aspect ratio.
+     */
+    phoneview_ui_fit_initial_window(ui, video_width, video_height);
 
     while (gtk_events_pending()) {
         gtk_main_iteration_do(FALSE);
