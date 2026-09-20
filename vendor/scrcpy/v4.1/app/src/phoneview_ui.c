@@ -28,7 +28,7 @@
 #include <SDL3/SDL.h>
 
 #define PHONEVIEW_UI_TITLEBAR_HEIGHT 40
-#define PHONEVIEW_UI_TOOLBAR_HEIGHT 44
+#define PHONEVIEW_UI_TOOLBAR_HEIGHT 50
 #define PHONEVIEW_UI_OUTER_MARGIN 24
 #define PHONEVIEW_UI_MIN_VIDEO_WIDTH 220
 #define PHONEVIEW_UI_MIN_VIDEO_HEIGHT 300
@@ -84,6 +84,30 @@ phoneview_make_window_button(const char *label, const char *name) {
     return button;
 }
 
+static void
+phoneview_make_labels_single_line(GtkWidget *widget) {
+    if (!widget) {
+        return;
+    }
+
+    if (GTK_IS_LABEL(widget)) {
+        gtk_label_set_single_line_mode(GTK_LABEL(widget), TRUE);
+        gtk_label_set_ellipsize(GTK_LABEL(widget), PANGO_ELLIPSIZE_END);
+        gtk_label_set_max_width_chars(GTK_LABEL(widget), 18);
+        return;
+    }
+
+    if (!GTK_IS_CONTAINER(widget)) {
+        return;
+    }
+
+    GList *children = gtk_container_get_children(GTK_CONTAINER(widget));
+    for (GList *item = children; item; item = item->next) {
+        phoneview_make_labels_single_line(GTK_WIDGET(item->data));
+    }
+    g_list_free(children);
+}
+
 static GtkWidget *
 phoneview_make_toolbar_button(const char *label,
                               const char *icon_name,
@@ -97,6 +121,7 @@ phoneview_make_toolbar_button(const char *label,
     gtk_widget_set_name(button, name);
     gtk_widget_set_can_focus(button, FALSE);
     gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+    phoneview_make_labels_single_line(button);
 
     return button;
 }
@@ -604,7 +629,11 @@ sc_phoneview_ui_create(const char *title,
     gtk_widget_set_name(ui->title_label, "phoneview-title");
     gtk_widget_set_name(ui->title_project, "phoneview-project");
     gtk_label_set_xalign(GTK_LABEL(ui->title_label), 0.f);
+    gtk_label_set_single_line_mode(GTK_LABEL(ui->title_label), TRUE);
     gtk_label_set_xalign(GTK_LABEL(ui->title_project), 0.f);
+    gtk_label_set_single_line_mode(GTK_LABEL(ui->title_project), TRUE);
+    gtk_label_set_ellipsize(GTK_LABEL(ui->title_project),
+                            PANGO_ELLIPSIZE_END);
 
     gtk_box_pack_start(GTK_BOX(title_box),
                        ui->title_icon,
@@ -727,6 +756,9 @@ sc_phoneview_ui_create(const char *title,
     gtk_tool_item_set_expand(status_item, TRUE);
     ui->status_label = gtk_label_new("");
     gtk_label_set_xalign(GTK_LABEL(ui->status_label), 1.f);
+    gtk_label_set_single_line_mode(GTK_LABEL(ui->status_label), TRUE);
+    gtk_label_set_ellipsize(GTK_LABEL(ui->status_label),
+                            PANGO_ELLIPSIZE_END);
     gtk_widget_set_name(ui->status_label, "phoneview-status");
     gtk_container_add(GTK_CONTAINER(status_item), ui->status_label);
     gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), status_item, -1);
@@ -1164,6 +1196,35 @@ phoneview_dialog_mouse_combo(const char *value) {
 }
 
 static GtkWidget *
+phoneview_dialog_look_activation_combo(const char *value) {
+    GtkWidget *combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "keyboard", "Keyboard Key");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "mouse", "Mouse Button");
+    gtk_combo_box_set_active_id(
+        GTK_COMBO_BOX(combo),
+        value && value[0] ? value : "keyboard");
+    return combo;
+}
+
+static void
+phoneview_dialog_update_look_activation(
+    GtkComboBox *combo,
+    gpointer userdata) {
+    GtkWidget **widgets = userdata;
+    if (!widgets) {
+        return;
+    }
+
+    const char *id = gtk_combo_box_get_active_id(combo);
+    bool keyboard = id && !strcmp(id, "keyboard");
+
+    gtk_widget_set_sensitive(widgets[0], keyboard);
+    gtk_widget_set_sensitive(widgets[1], !keyboard);
+}
+
+static GtkWidget *
 phoneview_dialog_wheel_combo(const char *value) {
     GtkWidget *combo = gtk_combo_box_text_new();
     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
@@ -1219,10 +1280,14 @@ sc_phoneview_ui_configure_new_control(
         case SC_PHONEVIEW_ADD_LOOK:
             snprintf(control->label, sizeof(control->label), "LOOK");
             snprintf(control->type, sizeof(control->type), "look");
+            snprintf(control->key, sizeof(control->key), "Right Shift");
             snprintf(control->mouse_button,
                      sizeof(control->mouse_button), "right");
+            snprintf(control->look_activation,
+                     sizeof(control->look_activation), "keyboard");
             snprintf(control->behavior, sizeof(control->behavior), "hold");
             control->sensitivity = 1.6f;
+            control->speed = 1.0f;
             break;
         case SC_PHONEVIEW_ADD_WHEEL:
             snprintf(control->label, sizeof(control->label), "WHEEL");
@@ -1247,6 +1312,9 @@ sc_phoneview_ui_configure_new_control(
     control->size = 1.0f;
     if (control->sensitivity <= 0.0f) {
         control->sensitivity = 1.6f;
+    }
+    if (control->speed <= 0.0f) {
+        control->speed = 1.0f;
     }
 
     GtkWindow *parent = ui && ui->window ? GTK_WINDOW(ui->window) : NULL;
@@ -1292,8 +1360,13 @@ sc_phoneview_ui_configure_new_control(
     GtkWidget *left_entry = NULL;
     GtkWidget *down_entry = NULL;
     GtkWidget *right_entry = NULL;
+    GtkWidget *look_activation_combo = NULL;
+    GtkWidget *look_key_entry = NULL;
     GtkWidget *size_spin = NULL;
     GtkWidget *sensitivity_spin = NULL;
+    GtkWidget *speed_spin = NULL;
+    GtkWidget *look_activation_combo = NULL;
+    GtkWidget *look_key_entry = NULL;
 
     int row = 1;
 
@@ -1308,24 +1381,58 @@ sc_phoneview_ui_configure_new_control(
         key_entry = phoneview_dialog_key_entry(control->key);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Key", key_entry);
         phoneview_dialog_set_key_hint(GTK_GRID(grid), row++);
-    } else if (add_type == SC_PHONEVIEW_ADD_MOUSE
-            || add_type == SC_PHONEVIEW_ADD_LOOK) {
+    } else if (add_type == SC_PHONEVIEW_ADD_MOUSE) {
         mouse_combo = phoneview_dialog_mouse_combo(control->mouse_button);
         phoneview_dialog_add_row(GTK_GRID(grid), row++,
                                  "Mouse Button", mouse_combo);
+    } else if (add_type == SC_PHONEVIEW_ADD_LOOK) {
+        look_activation_combo =
+            phoneview_dialog_look_activation_combo(
+                control->look_activation);
 
-        if (add_type == SC_PHONEVIEW_ADD_LOOK) {
-            sensitivity_spin =
-                gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
-            gtk_spin_button_set_value(
-                GTK_SPIN_BUTTON(sensitivity_spin),
-                control->sensitivity);
-            gtk_spin_button_set_digits(
-                GTK_SPIN_BUTTON(sensitivity_spin), 1);
-            phoneview_dialog_add_row(GTK_GRID(grid), row++,
-                                     "Look Sensitivity",
-                                     sensitivity_spin);
-        }
+        look_key_entry = phoneview_dialog_key_entry(control->key);
+        mouse_combo = phoneview_dialog_mouse_combo(control->mouse_button);
+
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Activate With",
+                                 look_activation_combo);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Keyboard Key",
+                                 look_key_entry);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Mouse Button",
+                                 mouse_combo);
+
+        sensitivity_spin =
+            gtk_spin_button_new_with_range(0.1, 10.0, 0.1);
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(sensitivity_spin),
+            control->sensitivity);
+        gtk_spin_button_set_digits(
+            GTK_SPIN_BUTTON(sensitivity_spin), 1);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Sensitivity",
+                                 sensitivity_spin);
+
+        speed_spin =
+            gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(speed_spin),
+            control->speed > 0.01f ? control->speed : 1.0f);
+        gtk_spin_button_set_digits(GTK_SPIN_BUTTON(speed_spin), 1);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Speed", speed_spin);
+
+        GtkWidget *look_inputs[2] = {look_key_entry, mouse_combo};
+        g_signal_connect_data(
+            look_activation_combo,
+            "changed",
+            G_CALLBACK(phoneview_dialog_update_look_activation),
+            look_inputs,
+            NULL,
+            0);
+        phoneview_dialog_update_look_activation(
+            GTK_COMBO_BOX(look_activation_combo), look_inputs);
+    }
     } else if (add_type == SC_PHONEVIEW_ADD_WHEEL) {
         wheel_combo = phoneview_dialog_wheel_combo(
             control->mouse_button);
@@ -1403,6 +1510,26 @@ sc_phoneview_ui_configure_new_control(
             }
         }
 
+        if (look_activation_combo) {
+            const char *id =
+                gtk_combo_box_get_active_id(
+                    GTK_COMBO_BOX(look_activation_combo));
+            if (id && id[0]) {
+                snprintf(control->look_activation,
+                         sizeof(control->look_activation), "%s", id);
+            }
+        }
+
+        if (look_key_entry) {
+            const char *value =
+                gtk_entry_get_text(GTK_ENTRY(look_key_entry));
+            if (!value || !value[0]) {
+                apply = false;
+            } else {
+                snprintf(control->key, sizeof(control->key), "%s", value);
+            }
+        }
+
         if (wheel_combo) {
             const char *id =
                 gtk_combo_box_get_active_id(
@@ -1441,6 +1568,11 @@ sc_phoneview_ui_configure_new_control(
             control->sensitivity =
                 (float) gtk_spin_button_get_value(
                     GTK_SPIN_BUTTON(sensitivity_spin));
+        }
+        if (speed_spin) {
+            control->speed =
+                (float) gtk_spin_button_get_value(
+                    GTK_SPIN_BUTTON(speed_spin));
         }
     }
 
@@ -1533,11 +1665,39 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Down", down_entry);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Right", right_entry);
         phoneview_dialog_set_key_hint(GTK_GRID(grid), row++);
-    } else if (!strcmp(control->type, "mouse")
-               || !strcmp(control->type, "look")) {
+    } else if (!strcmp(control->type, "mouse")) {
         mouse_entry = phoneview_dialog_entry(control->mouse_button);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Mouse Button",
                                  mouse_entry);
+    } else if (!strcmp(control->type, "look")) {
+        look_activation_combo =
+            phoneview_dialog_look_activation_combo(
+                control->look_activation[0]
+                    ? control->look_activation : "mouse");
+
+        look_key_entry = phoneview_dialog_key_entry(control->key);
+        mouse_entry = phoneview_dialog_entry(control->mouse_button);
+
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Activate With",
+                                 look_activation_combo);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Keyboard Key",
+                                 look_key_entry);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Mouse Button",
+                                 mouse_entry);
+
+        GtkWidget *look_inputs[2] = {look_key_entry, mouse_entry};
+        g_signal_connect_data(
+            look_activation_combo,
+            "changed",
+            G_CALLBACK(phoneview_dialog_update_look_activation),
+            look_inputs,
+            NULL,
+            0);
+        phoneview_dialog_update_look_activation(
+            GTK_COMBO_BOX(look_activation_combo), look_inputs);
     } else if (!strcmp(control->type, "wheel")) {
         mouse_entry = phoneview_dialog_entry(control->mouse_button);
         gtk_widget_set_sensitive(mouse_entry, FALSE);
@@ -1554,14 +1714,24 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
     gtk_widget_set_name(size_spin, "phoneview-editor-size");
 
     GtkWidget *sensitivity_spin = NULL;
+    GtkWidget *speed_spin = NULL;
     if (!strcmp(control->type, "look")) {
-        sensitivity_spin = gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
+        sensitivity_spin =
+            gtk_spin_button_new_with_range(0.1, 10.0, 0.1);
         gtk_spin_button_set_value(
             GTK_SPIN_BUTTON(sensitivity_spin),
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f);
         gtk_spin_button_set_digits(GTK_SPIN_BUTTON(sensitivity_spin), 1);
-        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Look Sensitivity",
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Sensitivity",
                                  sensitivity_spin);
+
+        speed_spin =
+            gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(speed_spin),
+            control->speed > 0.01f ? control->speed : 1.0f);
+        gtk_spin_button_set_digits(GTK_SPIN_BUTTON(speed_spin), 1);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Speed", speed_spin);
     }
 
     GtkWidget *position_hint = gtk_label_new(
@@ -1598,6 +1768,37 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
             }
         }
 
+        if (look_activation_combo) {
+            const char *id =
+                gtk_combo_box_get_active_id(
+                    GTK_COMBO_BOX(look_activation_combo));
+            if (id && id[0]) {
+                snprintf(control->look_activation,
+                         sizeof(control->look_activation), "%s", id);
+            }
+
+            if (look_key_entry) {
+                const char *value =
+                    gtk_entry_get_text(GTK_ENTRY(look_key_entry));
+                if (value && value[0]) {
+                    snprintf(control->key, sizeof(control->key), "%s", value);
+                } else if (id && !strcmp(id, "keyboard")) {
+                    apply = false;
+                }
+            }
+
+            if (mouse_entry) {
+                const char *value =
+                    gtk_entry_get_text(GTK_ENTRY(mouse_entry));
+                if (value && value[0]) {
+                    snprintf(control->mouse_button,
+                             sizeof(control->mouse_button), "%s", value);
+                } else if (id && !strcmp(id, "mouse")) {
+                    apply = false;
+                }
+            }
+        }
+
         if (up_entry && left_entry && down_entry && right_entry) {
             const char *up = gtk_entry_get_text(GTK_ENTRY(up_entry));
             const char *left = gtk_entry_get_text(GTK_ENTRY(left_entry));
@@ -1613,7 +1814,9 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
             }
         }
 
-        if (mouse_entry && strcmp(control->type, "wheel")) {
+        if (mouse_entry
+                && strcmp(control->type, "wheel")
+                && strcmp(control->type, "look")) {
             const char *value = gtk_entry_get_text(GTK_ENTRY(mouse_entry));
             if (value && value[0]) {
                 snprintf(control->mouse_button,
@@ -1634,6 +1837,11 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
             control->sensitivity =
                 (float) gtk_spin_button_get_value(
                     GTK_SPIN_BUTTON(sensitivity_spin));
+        }
+        if (speed_spin) {
+            control->speed =
+                (float) gtk_spin_button_get_value(
+                    GTK_SPIN_BUTTON(speed_spin));
         }
     }
 
