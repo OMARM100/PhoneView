@@ -48,6 +48,8 @@ struct sc_phoneview_ui {
     GtkWidget *edit_button;
     GtkWidget *add_button;
     GtkWidget *save_button;
+    GtkWidget *duplicate_button;
+    GtkWidget *delete_button;
     GtkWidget *done_button;
     GtkWidget *status_label;
 
@@ -159,6 +161,18 @@ static void
 phoneview_ui_on_save(GtkButton *button, gpointer userdata) {
     (void) button;
     phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_SAVE);
+}
+
+static void
+phoneview_ui_on_duplicate(GtkButton *button, gpointer userdata) {
+    (void) button;
+    phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_DUPLICATE);
+}
+
+static void
+phoneview_ui_on_delete(GtkButton *button, gpointer userdata) {
+    (void) button;
+    phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_DELETE);
 }
 
 static void
@@ -413,11 +427,15 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
     gtk_widget_set_visible(ui->edit_button, !ui->edit_mode);
     gtk_widget_set_visible(ui->add_button, ui->edit_mode);
     gtk_widget_set_visible(ui->save_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->duplicate_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->delete_button, ui->edit_mode);
     gtk_widget_set_visible(ui->done_button, ui->edit_mode);
     gtk_widget_set_visible(ui->status_label, ui->edit_mode);
 
     gtk_widget_set_sensitive(ui->add_button, ui->edit_mode);
     gtk_widget_set_sensitive(ui->save_button, ui->edit_mode);
+    gtk_widget_set_sensitive(ui->duplicate_button, ui->edit_mode);
+    gtk_widget_set_sensitive(ui->delete_button, ui->edit_mode);
     gtk_widget_set_sensitive(ui->done_button, ui->edit_mode);
 
     GtkStyleContext *edit_style =
@@ -670,6 +688,14 @@ sc_phoneview_ui_create(const char *title,
         phoneview_make_toolbar_button("Save",
                                        "document-save-symbolic",
                                        "phoneview-save-button");
+    ui->duplicate_button =
+        phoneview_make_toolbar_button("Duplicate",
+                                       "edit-copy-symbolic",
+                                       "phoneview-duplicate-button");
+    ui->delete_button =
+        phoneview_make_toolbar_button("Delete",
+                                       "edit-delete-symbolic",
+                                       "phoneview-delete-button");
     ui->done_button =
         phoneview_make_toolbar_button("Done",
                                        "emblem-ok-symbolic",
@@ -686,6 +712,15 @@ sc_phoneview_ui_create(const char *title,
                        gtk_separator_tool_item_new(),
                        -1);
     gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), save_item, -1);
+    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar),
+                       gtk_separator_tool_item_new(),
+                       -1);
+    GtkToolItem *duplicate_item = gtk_tool_item_new();
+    GtkToolItem *delete_item = gtk_tool_item_new();
+    gtk_container_add(GTK_CONTAINER(duplicate_item), ui->duplicate_button);
+    gtk_container_add(GTK_CONTAINER(delete_item), ui->delete_button);
+    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), duplicate_item, -1);
+    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), delete_item, -1);
     gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), done_item, -1);
 
     GtkToolItem *status_item = gtk_tool_item_new();
@@ -707,6 +742,14 @@ sc_phoneview_ui_create(const char *title,
     g_signal_connect(ui->save_button,
                      "clicked",
                      G_CALLBACK(phoneview_ui_on_save),
+                     ui);
+    g_signal_connect(ui->duplicate_button,
+                     "clicked",
+                     G_CALLBACK(phoneview_ui_on_duplicate),
+                     ui);
+    g_signal_connect(ui->delete_button,
+                     "clicked",
+                     G_CALLBACK(phoneview_ui_on_delete),
                      ui);
     g_signal_connect(ui->done_button,
                      "clicked",
@@ -1028,10 +1071,17 @@ phoneview_dialog_entry(const char *value) {
     GtkWidget *entry = gtk_entry_new();
     gtk_entry_set_text(GTK_ENTRY(entry), value ? value : "");
     gtk_entry_set_width_chars(GTK_ENTRY(entry), 22);
+    return entry;
+}
+
+static GtkWidget *
+phoneview_dialog_key_entry(const char *value) {
+    GtkWidget *entry = phoneview_dialog_entry(value);
     g_signal_connect(entry,
                      "key-press-event",
                      G_CALLBACK(phoneview_dialog_key_press),
                      NULL);
+    gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Press a key...");
     return entry;
 }
 
@@ -1134,14 +1184,14 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
     GtkWidget *right_entry = NULL;
 
     if (!strcmp(control->type, "keyboard")) {
-        key_entry = phoneview_dialog_entry(control->key);
+        key_entry = phoneview_dialog_key_entry(control->key);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Key", key_entry);
         phoneview_dialog_set_key_hint(GTK_GRID(grid), row++);
     } else if (!strcmp(control->type, "joystick")) {
-        up_entry = phoneview_dialog_entry(control->up_key);
-        left_entry = phoneview_dialog_entry(control->left_key);
-        down_entry = phoneview_dialog_entry(control->down_key);
-        right_entry = phoneview_dialog_entry(control->right_key);
+        up_entry = phoneview_dialog_key_entry(control->up_key);
+        left_entry = phoneview_dialog_key_entry(control->left_key);
+        down_entry = phoneview_dialog_key_entry(control->down_key);
+        right_entry = phoneview_dialog_key_entry(control->right_key);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Up", up_entry);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Left", left_entry);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Down", down_entry);
@@ -1157,6 +1207,25 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
         gtk_widget_set_sensitive(mouse_entry, FALSE);
         phoneview_dialog_add_row(GTK_GRID(grid), row++, "Wheel Direction",
                                  mouse_entry);
+    }
+
+    GtkWidget *size_spin = gtk_spin_button_new_with_range(50.0, 300.0, 5.0);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(size_spin),
+                              control->size > 0.01f ? control->size * 100.0 : 100.0);
+    gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(size_spin), TRUE);
+    gtk_entry_set_width_chars(GTK_ENTRY(size_spin), 8);
+    phoneview_dialog_add_row(GTK_GRID(grid), row++, "Size %", size_spin);
+    gtk_widget_set_name(size_spin, "phoneview-editor-size");
+
+    GtkWidget *sensitivity_spin = NULL;
+    if (!strcmp(control->type, "look")) {
+        sensitivity_spin = gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
+        gtk_spin_button_set_value(
+            GTK_SPIN_BUTTON(sensitivity_spin),
+            control->sensitivity > 0.01f ? control->sensitivity : 1.6f);
+        gtk_spin_button_set_digits(GTK_SPIN_BUTTON(sensitivity_spin), 1);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Look Sensitivity",
+                                 sensitivity_spin);
     }
 
     GtkWidget *position_hint = gtk_label_new(
@@ -1214,6 +1283,21 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
                 snprintf(control->mouse_button,
                          sizeof(control->mouse_button), "%s", value);
             }
+        }
+
+        double size_percent =
+            gtk_spin_button_get_value(GTK_SPIN_BUTTON(size_spin));
+        control->size = (float) size_percent / 100.0f;
+        if (control->size < 0.5f) {
+            control->size = 0.5f;
+        } else if (control->size > 3.0f) {
+            control->size = 3.0f;
+        }
+
+        if (sensitivity_spin) {
+            control->sensitivity =
+                (float) gtk_spin_button_get_value(
+                    GTK_SPIN_BUTTON(sensitivity_spin));
         }
     }
 
