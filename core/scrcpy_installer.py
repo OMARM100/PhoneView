@@ -103,6 +103,21 @@ class ScrcpyInstaller:
             )
 
     @staticmethod
+    @staticmethod
+    def _source_stamp(paths):
+        digest = hashlib.sha256()
+        digest.update(PHONEVIEW_BUILD_NAME.encode("utf-8"))
+        digest.update(b"\0")
+
+        for path in sorted(paths, key=lambda item: str(item)):
+            relative = str(path.relative_to(VENDORED_ROOT)).encode("utf-8")
+            digest.update(relative)
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+
+        return digest.hexdigest()
+
     def _pkg_config_has_sdl3(env):
         try:
             result = subprocess.run(
@@ -239,6 +254,7 @@ class ScrcpyInstaller:
             VENDORED_ROOT / "app" / "src" / "phoneview_ui.c",
             VENDORED_ROOT / "app" / "src" / "phoneview_ui.h",
             VENDORED_ROOT / "server" / "meson.build",
+            VENDORED_ROOT / "app" / "deps" / "sdl.sh",
         )
         missing = [str(p) for p in required_source if not p.is_file()]
         if missing:
@@ -247,20 +263,27 @@ class ScrcpyInstaller:
         target_root = ScrcpyInstaller.target_root()
         target_binary = target_root / "bin" / "scrcpy"
         target_server = target_root / "share" / "scrcpy" / "scrcpy-server"
+        target_stamp = target_root / ".phoneview-source-stamp"
+        source_stamp = ScrcpyInstaller._source_stamp(required_source)
+
         if (
             target_binary.is_file()
             and os.access(target_binary, os.X_OK)
             and target_server.is_file()
             and target_server.stat().st_size > 0
+            and target_stamp.is_file()
+            and target_stamp.read_text(encoding="utf-8").strip() == source_stamp
         ):
             ScrcpyInstaller._install_launcher(target_binary)
-            emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} is already installed.")
+            emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} is up to date; skipping rebuild.")
             set_progress(100)
             return str(target_binary)
 
         if target_root.exists():
-            emit("↓ Existing PhoneView scrcpy installation is incomplete; rebuilding it.")
-            shutil.rmtree(target_root)
+            if target_binary.is_file():
+                emit("↓ PhoneView scrcpy source changed; rebuilding the cached engine.")
+            else:
+                emit("↓ Existing PhoneView scrcpy installation is incomplete; rebuilding it.")
 
         INSTALL_ROOT.mkdir(parents=True, exist_ok=True)
         BIN_ROOT.mkdir(parents=True, exist_ok=True)
@@ -329,6 +352,10 @@ class ScrcpyInstaller:
             set_progress(78)
 
             emit("Installing the patched scrcpy engine...")
+            if target_root.exists():
+                shutil.rmtree(target_root)
+            target_root.mkdir(parents=True, exist_ok=True)
+
             ScrcpyInstaller._run(
                 ["ninja", "-C", str(build_root), "install"],
                 cwd=source_root,
@@ -349,6 +376,11 @@ class ScrcpyInstaller:
         target_binary = target_root / "bin" / "scrcpy"
         if not target_binary.is_file():
             raise RuntimeError("The patched scrcpy build completed, but the executable was not found.")
+
+        (target_root / ".phoneview-source-stamp").write_text(
+            source_stamp + "\n",
+            encoding="utf-8",
+        )
 
         target_binary.chmod(
             target_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
