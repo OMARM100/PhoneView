@@ -2094,9 +2094,14 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                              control->down_key);
                     snprintf(edit.right_key, sizeof(edit.right_key), "%s",
                              control->right_key);
+                    snprintf(edit.look_activation,
+                             sizeof(edit.look_activation), "%s",
+                             control->look_activation);
                     edit.size = scale;
                     edit.sensitivity = control->sensitivity > 0.f
                         ? control->sensitivity : 1.6f;
+                    edit.speed = control->speed > 0.f
+                        ? control->speed : 1.0f;
 
                     if (sc_phoneview_ui_edit_control(
                             screen->phoneview.ui, &edit)) {
@@ -2121,9 +2126,14 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                         snprintf(control->right_key,
                                  sizeof(control->right_key), "%s",
                                  edit.right_key);
+                        snprintf(control->look_activation,
+                                 sizeof(control->look_activation), "%s",
+                                 edit.look_activation);
                         control->size = SDL_clamp(edit.size, 0.5f, 3.f);
                         control->sensitivity =
-                            SDL_clamp(edit.sensitivity, 0.1f, 5.f);
+                            SDL_clamp(edit.sensitivity, 0.1f, 10.f);
+                        control->speed =
+                            SDL_clamp(edit.speed, 0.1f, 5.f);
 
                         phoneview_save_controls(screen);
                         sc_phoneview_ui_set_capture_status(
