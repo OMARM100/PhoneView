@@ -156,6 +156,30 @@ class ScrcpyInstaller:
         return digest.hexdigest()
 
     @staticmethod
+    def build_is_current():
+        target_root = ScrcpyInstaller.target_root()
+        target_binary = target_root / "bin" / "scrcpy"
+        target_server = target_root / "share" / "scrcpy" / "scrcpy-server"
+        target_stamp = target_root / ".phoneview-source-stamp"
+
+        if (
+            not target_binary.is_file()
+            or not os.access(target_binary, os.X_OK)
+            or not target_server.is_file()
+            or target_server.stat().st_size <= 0
+            or not target_stamp.is_file()
+        ):
+            return False
+
+        try:
+            return (
+                target_stamp.read_text(encoding="utf-8").strip()
+                == ScrcpyInstaller._source_stamp()
+            )
+        except (OSError, UnicodeError):
+            return False
+
+    @staticmethod
     def runtime_library_dir():
         path = ScrcpyInstaller.target_root() / "lib"
         return str(path) if path.is_dir() else ""
