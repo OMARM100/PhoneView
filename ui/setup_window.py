@@ -85,6 +85,7 @@ class SetupWindow(QDialog):
         self.package_progress = {}
         self.rows = {}
         self.install_timer = None
+        self.pending_scrcpy_build = False
 
         self.build_ui()
         QTimer.singleShot(250, self.run_check)
@@ -364,65 +365,49 @@ class SetupWindow(QDialog):
         if self.process is not None or self.cancelling:
             return
 
-        packages = self.checker.missing_linux_packages()
+        packages = [
+            package
+            for package in self.checker.missing_linux_packages()
+            if package != "phoneview-scrcpy"
+        ]
         if not packages:
             self.run_check()
             return
 
-        # scrcpy is deliberately installed outside apt. Ubuntu/Debian repositories
-        # may ship an obsolete release, so PhoneView uses the official stable archive.
-        if "phoneview-scrcpy" in packages:
-            self.installing = True
-            self.cancelling = False
-            self.current_packages = packages
-            self.package_progress = {package: 0 for package in packages}
-            self.retry_button.setEnabled(False)
-            self.cancel_button.setEnabled(True)
-            self.continue_button.setEnabled(False)
-
-            self.set_row("scrcpy", "Building pinned PhoneView engine", "↓", "#2979FF")
-            self.status.setText("Building PhoneView scrcpy")
-            self.detail.setText(
-                "Building the pinned scrcpy 4.1 source with PhoneView's mapping editor patch. "
-                "Newer upstream releases are intentionally ignored."
-            )
-            self.set_progress(18, "Preparing the pinned scrcpy 4.1 build...")
-            self.write_log("PhoneView scrcpy build started.")
-            self.write_log("Pinned source: Genymobile/scrcpy v4.1.")
-            self.write_log("Automatic upstream scrcpy updates are disabled.")
-
-            self.process = QProcess(self)
-            self.process.setProcessChannelMode(QProcess.MergedChannels)
-            self.process.readyReadStandardOutput.connect(self.read_scrcpy_output)
-            self.process.finished.connect(self.scrcpy_update_finished)
-            self.process.errorOccurred.connect(self.process_error)
-            self.process.start(
-                sys.executable,
-                ["-m", "core.scrcpy_installer"],
-            )
-            return
+        self.pending_scrcpy_build = "phoneview-scrcpy" in packages
+        system_packages = [package for package in packages if package != "phoneview-scrcpy"]
 
         self.installing = True
         self.cancelling = False
-        self.current_packages = packages
-        self.package_progress = {package: 0 for package in packages}
+        self.current_packages = system_packages
+        self.package_progress = {package: 0 for package in system_packages}
 
         self.retry_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
 
-        for package in packages:
+        if self.pending_scrcpy_build:
+            self.set_row("scrcpy", "Build required", "↓", "#2979FF")
+            self.write_log("PhoneView requires its pinned scrcpy 4.1 engine.")
+            self.write_log("New upstream scrcpy releases will not be checked or installed.")
+
+        for package in system_packages:
             key = self.package_to_key(package)
             if key:
                 self.set_row(key, "Queued", "↓", "#2979FF")
 
+        if not system_packages:
+            self.start_scrcpy_build()
+            return
+
         self.status.setText("Administrator permission required")
         self.detail.setText(
-            "A secure system authentication dialog will appear. "
-            "Enter your password there. PhoneView does not see, store, or log it."
+            "PhoneView will install the required Linux packages first. "
+            "After that, it will build the pinned scrcpy 4.1 PhoneView engine."
         )
         self.set_progress(20, "Waiting for the system authorization dialog...")
-        self.write_log("Automatic setup started.")
+        self.write_log("Automatic system setup started.")
+        self.write_log("System packages: " + ", ".join(system_packages))
         self.write_log(f"Using administrator authorization: {self.pkexec_path()}")
         self.write_log("Password security: authentication is handled by the operating system.")
         self.write_log("Requesting graphical system authorization (no Terminal window).")
@@ -431,6 +416,35 @@ class SetupWindow(QDialog):
         self.install_timer.setSingleShot(True)
         self.install_timer.timeout.connect(self.start_authorized_update)
         self.install_timer.start(700)
+
+    def start_scrcpy_build(self):
+        if self.process is not None or self.cancelling:
+            return
+
+        self.installing = True
+        self.retry_button.setEnabled(False)
+        self.cancel_button.setEnabled(True)
+        self.continue_button.setEnabled(False)
+
+        self.set_row("scrcpy", "Building PhoneView engine", "↓", "#2979FF")
+        self.status.setText("Building PhoneView scrcpy")
+        self.detail.setText(
+            "Building pinned scrcpy 4.1 with the native PhoneView mapping editor."
+        )
+        self.set_progress(18, "Preparing the pinned scrcpy 4.1 build...")
+        self.write_log("PhoneView scrcpy build started.")
+        self.write_log("Pinned source: Genymobile/scrcpy v4.1.")
+        self.write_log("Automatic upstream scrcpy updates are disabled.")
+
+        self.process = QProcess(self)
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.read_scrcpy_output)
+        self.process.finished.connect(self.scrcpy_build_finished)
+        self.process.errorOccurred.connect(self.process_error)
+        self.process.start(
+            sys.executable,
+            ["-m", "core.scrcpy_installer"],
+        )
 
     def read_scrcpy_output(self):
         if not self.process:
@@ -448,7 +462,7 @@ class SetupWindow(QDialog):
             if line.startswith("PROGRESS:"):
                 try:
                     percent = int(float(line.split(":", 1)[1]))
-                    self.set_progress(max(18, min(96, percent)), f"Updating scrcpy... {percent}%")
+                    self.set_progress(max(18, min(96, percent)), f"Building PhoneView scrcpy... {percent}%")
                 except ValueError:
                     pass
                 continue
@@ -459,7 +473,7 @@ class SetupWindow(QDialog):
 
             self.write_log(line)
 
-    def scrcpy_update_finished(self, exit_code, exit_status):
+    def scrcpy_build_finished(self, exit_code, exit_status):
         self.read_scrcpy_output()
         if self.cancelling:
             return
@@ -468,8 +482,8 @@ class SetupWindow(QDialog):
 
         if exit_code != 0:
             self.fail_setup(
-                "scrcpy update failed",
-                "PhoneView could not install the official stable scrcpy release. "
+                "scrcpy build failed",
+                "PhoneView could not build its pinned scrcpy 4.1 engine. "
                 "Check the Activity log for the exact error.",
                 exit_code,
             )
@@ -702,12 +716,19 @@ class SetupWindow(QDialog):
             return
 
         self.installing = False
+        self.cleanup_process()
+
+        if self.pending_scrcpy_build:
+            self.pending_scrcpy_build = False
+            self.write_log("✓ System packages installed.")
+            self.set_progress(16, "System prerequisites are ready. Building PhoneView scrcpy...")
+            QTimer.singleShot(500, self.start_scrcpy_build)
+            return
+
         self.set_progress(95, "Installation finished. Verifying...")
         self.status.setText("Verifying installation")
         self.detail.setText("Checking every component again before PhoneView starts.")
         self.write_log("✓ Installation completed. Running final verification...")
-
-        self.cleanup_process()
         QTimer.singleShot(800, self.run_check)
 
     def finish_success(self):
