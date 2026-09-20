@@ -199,11 +199,24 @@ sc_phoneview_ui_create(const char *title,
     }
 
     Window xid = gdk_x11_window_get_xid(gdk_video_window);
-    ui->video_window = SDL_CreateWindowFrom(
-        (const void *) (uintptr_t) xid
-    );
+
+    SDL_PropertiesID props = SDL_CreateProperties();
+    if (!props) {
+        LOGE("PhoneView UI: SDL_CreateProperties() failed: %s",
+             SDL_GetError());
+        sc_phoneview_ui_destroy(ui);
+        return NULL;
+    }
+
+    SDL_SetNumberProperty(props,
+                          SDL_PROP_WINDOW_CREATE_X11_WINDOW_NUMBER,
+                          (Sint64) xid);
+
+    ui->video_window = SDL_CreateWindowWithProperties(props);
+    SDL_DestroyProperties(props);
+
     if (!ui->video_window) {
-        LOGE("PhoneView UI: SDL_CreateWindowFrom() failed: %s",
+        LOGE("PhoneView UI: SDL_CreateWindowWithProperties() failed: %s",
              SDL_GetError());
         sc_phoneview_ui_destroy(ui);
         return NULL;
