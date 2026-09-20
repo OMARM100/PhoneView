@@ -419,7 +419,7 @@ class MainWindow(QMainWindow):
         al.addWidget(self.log)
         main.addWidget(activity)
 
-        self.write_log("PhoneView started. Android mirror stays in a separate scrcpy window.")
+        self.write_log("PhoneView started. Android mirror is embedded in the PhoneView window.")
         if not self.adb.available():
             self.write_log("✗ ADB was not found.")
         if not self.scrcpy.available():
@@ -524,7 +524,7 @@ class MainWindow(QMainWindow):
             self.header_state.setText("●  DEVICE READY")
             self.stream_state.setText("●  READY")
             self.stream_state.setObjectName("StatusGood")
-            self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nAndroid screen: separate scrcpy window.")
+            self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nAndroid screen: embedded in PhoneView.")
         elif device.state == "unauthorized":
             self.header_state.setText("●  AUTHORIZE PHONE")
             self.stream_state.setText("●  AUTHORIZATION REQUIRED")
@@ -608,7 +608,7 @@ class MainWindow(QMainWindow):
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
             self.header_state.setText("●  CONNECTED")
-            self.write_log("✓ Android screen connected in a separate scrcpy window.")
+            self.write_log("✓ Android screen connected inside PhoneView.")
             self.write_log("✓ Native PhoneView mapping editor is active inside scrcpy 4.1.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
         except Exception as exc:
@@ -660,7 +660,7 @@ class MainWindow(QMainWindow):
         try:
             self.scrcpy.focus_window(self.project_name)
         except Exception:
-            self.write_log("! Could not focus the separate scrcpy window.")
+            self.write_log("! Could not focus the PhoneView window.")
 
     def send_key(self, keycode, label):
         serial = self.connected_serial or (self.current_device().serial if self.current_device() else None)
