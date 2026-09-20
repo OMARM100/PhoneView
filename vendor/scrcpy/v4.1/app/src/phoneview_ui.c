@@ -93,7 +93,10 @@ phoneview_make_labels_single_line(GtkWidget *widget) {
     if (GTK_IS_LABEL(widget)) {
         gtk_label_set_single_line_mode(GTK_LABEL(widget), TRUE);
         gtk_label_set_ellipsize(GTK_LABEL(widget), PANGO_ELLIPSIZE_END);
-        gtk_label_set_max_width_chars(GTK_LABEL(widget), 18);
+        gtk_label_set_max_width_chars(GTK_LABEL(widget), 16);
+        gtk_label_set_lines(GTK_LABEL(widget), 1);
+        gtk_label_set_yalign(GTK_LABEL(widget), 0.5f);
+        gtk_widget_set_size_request(widget, -1, 18);
         return;
     }
 
