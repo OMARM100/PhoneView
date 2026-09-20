@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
 
 from core.adb_manager import ADBManager
 from core.scrcpy_manager import ScrcpyManager
-from ui.scrcpy_mapping_overlay import ScrcpyMappingOverlay
 
 
 QSS = """
@@ -210,7 +209,6 @@ class MainWindow(QMainWindow):
         self.project_name = "Android Project"
         self.controls_edit_mode = False
         self.custom_controls = self.load_custom_controls()
-        self.mapping_overlay = None
 
         self.build_ui()
 
@@ -606,8 +604,6 @@ class MainWindow(QMainWindow):
                 raise RuntimeError("scrcpy exited before the mirror window was created.")
 
             self.connected_serial = serial
-            self.ensure_mapping_overlay()
-            self.mapping_overlay.show_view_toolbar()
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
             self.stream_state.setObjectName("StatusGood")
@@ -644,54 +640,13 @@ class MainWindow(QMainWindow):
             self.write_log(f"! Could not save custom buttons: {exc}")
 
     def add_custom_control(self):
-        if not self.scrcpy.running():
-            self.write_log("! Start the Android screen before editing mappings.")
-            return
-        self.ensure_mapping_overlay()
-        self.mapping_overlay.show_editor()
-        self.mapping_overlay.begin_capture()
-
-    def ensure_mapping_overlay(self):
-        if self.mapping_overlay is None:
-            self.mapping_overlay = ScrcpyMappingOverlay(
-                self.project_name,
-                self.custom_controls,
-                self,
-            )
-            self.mapping_overlay.changed.connect(self.save_custom_controls)
-            self.mapping_overlay.capture_finished.connect(self._mapping_captured)
-
-    def _mapping_captured(self, item):
-        self.save_custom_controls()
-        self.write_log(
-            f"✓ Mapping captured: {item.get('label', 'Button')} "
-            f"({item.get('type', 'input')})"
-        )
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
 
     def toggle_controls_edit(self):
-        if not self.scrcpy.running():
-            self.write_log("! Start the Android screen before opening the mapping editor.")
-            return
-        self.ensure_mapping_overlay()
-        self.controls_edit_mode = not self.controls_edit_mode
-        if self.controls_edit_mode:
-            self.mapping_overlay.show_editor()
-            self.mapping_status.setText(
-                "MAPPING EDITOR ACTIVE\n\n"
-                "All mapping controls are shown directly over the scrcpy phone window."
-            )
-            self.write_log("✓ Mapping editor opened over the scrcpy window.")
-        else:
-            self.mapping_overlay.finish_editing()
-            self.mapping_status.setText(
-                "Mapping editor closed.\n\n"
-                "Open Edit whenever you need to change controls."
-            )
-            self.write_log("✓ Mapping editor closed.")
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
 
     def edit_custom_control(self, index):
-        if self.mapping_overlay and self.scrcpy.running():
-            self.mapping_overlay.show_editor()
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
 
     def remove_custom_control(self, index):
         if index < 0 or index >= len(self.custom_controls):
@@ -699,9 +654,7 @@ class MainWindow(QMainWindow):
         label = str(self.custom_controls[index].get("label", "Button"))
         self.custom_controls.pop(index)
         self.save_custom_controls()
-        if self.mapping_overlay:
-            self.mapping_overlay.rebuild_buttons()
-        self.write_log(f"✓ Custom button removed: {label}")
+        self.write_log(f"✓ Custom button removed from PhoneView config: {label}")
 
     def focus_scrcpy(self):
         try:
@@ -724,8 +677,6 @@ class MainWindow(QMainWindow):
         if self.connected_serial and not self.scrcpy.running():
             # Keep the connection alive while the native scrcpy window is still present.
             if self.scrcpy.window_exists(self.project_name):
-                if self.mapping_overlay:
-                    self.mapping_overlay.show_view_toolbar()
                 return
 
             self.scrcpy.read_output()
@@ -733,8 +684,6 @@ class MainWindow(QMainWindow):
             if self.scrcpy.last_output:
                 self.write_log(self.scrcpy.last_output[-2500:])
             self.connected_serial = None
-            if self.mapping_overlay:
-                self.mapping_overlay.hide()
             self.controls_edit_mode = False
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
@@ -746,8 +695,6 @@ class MainWindow(QMainWindow):
     def disconnect(self):
         self.scrcpy.stop()
         self.connected_serial = None
-        if self.mapping_overlay:
-            self.mapping_overlay.hide()
         self.controls_edit_mode = False
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
@@ -759,9 +706,5 @@ class MainWindow(QMainWindow):
         self.update_buttons()
 
     def closeEvent(self, event):
-        if self.mapping_overlay:
-            self.mapping_overlay.hide()
-            self.mapping_overlay.deleteLater()
-            self.mapping_overlay = None
         self.scrcpy.stop()
         event.accept()
