@@ -323,22 +323,6 @@ phoneview_hit_control(struct sc_screen *screen, float x, float y,
     return -1;
 }
 
-static struct sc_phoneview_control *
-phoneview_find_keyboard_control(struct sc_screen *screen, const char *key,
-                                size_t *index_out) {
-    for (size_t i = 0; i < screen->phoneview.count; ++i) {
-        struct sc_phoneview_control *control =
-            &screen->phoneview.controls[i];
-        if (!strcmp(control->type, "keyboard")
-                && !strcmp(control->key, key)) {
-            if (index_out) {
-                *index_out = i;
-            }
-            return control;
-        }
-    }
-    return NULL;
-}
 
 static struct sc_phoneview_control *
 phoneview_find_mouse_control(struct sc_screen *screen, const char *button,
