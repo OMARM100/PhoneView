@@ -273,17 +273,17 @@ phoneview_hit_control(struct sc_screen *screen, float x, float y,
 
 static bool
 phoneview_toolbar_edit_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 92.f, 11.f, 64.f, 32.f);
+    return phoneview_point_in_rect(x, y, 10.f, 10.f, 76.f, 34.f);
 }
 
 static bool
 phoneview_toolbar_add_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 92.f, 11.f, 88.f, 32.f);
+    return phoneview_point_in_rect(x, y, 88.f, 10.f, 98.f, 34.f);
 }
 
 static bool
 phoneview_toolbar_done_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 188.f, 11.f, 70.f, 32.f);
+    return phoneview_point_in_rect(x, y, 192.f, 10.f, 78.f, 34.f);
 }
 
 
