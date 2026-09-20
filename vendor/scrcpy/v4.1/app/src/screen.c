@@ -613,40 +613,43 @@ phoneview_render_overlay(struct sc_screen *screen) {
 
     struct sc_size size = sc_sdl_get_window_size(screen->window);
     float width = (float) size.width;
-    float height = (float) size.height;
+
+    // Real PhoneView toolbar: it occupies the client area above the
+    // mirrored Android screen instead of being painted on top of it.
+    SDL_SetRenderDrawColor(screen->renderer, 10, 14, 22, 255);
+    SDL_FRect toolbar = {0.f, 0.f, width, PHONEVIEW_TOOLBAR_H};
+    SDL_RenderFillRect(screen->renderer, &toolbar);
 
     if (screen->phoneview.edit_mode) {
-        phoneview_draw_box(screen->renderer, 8.f, 8.f, 328.f, 44.f,
-                           7, 11, 18, 230,
-                           76, 134, 234, 170);
-        phoneview_draw_box(screen->renderer, 16.f, 16.f, 70.f, 28.f,
-                           20, 29, 45, 240,
-                           100, 120, 150, 210);
-        phoneview_draw_box(screen->renderer, 92.f, 16.f, 88.f, 28.f,
-                           45, 115, 229, 245,
-                           125, 180, 255, 220);
-        phoneview_draw_box(screen->renderer, 188.f, 16.f, 70.f, 28.f,
-                           42, 128, 85, 245,
-                           120, 240, 170, 220);
+        phoneview_draw_box(screen->renderer, 10.f, 10.f, 72.f, 34.f,
+                           24, 31, 47, 255,
+                           105, 120, 145, 220);
+        phoneview_draw_box(screen->renderer, 88.f, 10.f, 98.f, 34.f,
+                           45, 115, 229, 255,
+                           140, 195, 255, 235);
+        phoneview_draw_box(screen->renderer, 192.f, 10.f, 78.f, 34.f,
+                           42, 128, 85, 255,
+                           145, 240, 175, 235);
 
-        phoneview_draw_text(screen->renderer, 24.f, 24.f, "PHONEVIEW");
-        phoneview_draw_text(screen->renderer, 112.f, 24.f, "ADD BTN");
-        phoneview_draw_text(screen->renderer, 205.f, 24.f, "DONE");
+        phoneview_draw_text(screen->renderer, 21.f, 20.f, "PHONEVIEW");
+        phoneview_draw_text(screen->renderer, 101.f, 20.f, "ADD BUTTON");
+        phoneview_draw_text(screen->renderer, 210.f, 20.f, "DONE");
 
         if (screen->phoneview.capture_mode) {
-            phoneview_draw_box(screen->renderer, 264.f, 16.f, 64.f, 28.f,
-                               8, 12, 18, 240,
-                               76, 134, 234, 190);
-            phoneview_draw_text(screen->renderer, 270.f, 24.f, "CAPTURE");
+            phoneview_draw_box(screen->renderer, 278.f, 10.f, 86.f, 34.f,
+                               92, 62, 28, 255,
+                               245, 190, 100, 235);
+            phoneview_draw_text(screen->renderer, 290.f, 20.f, "CAPTURE");
         }
 
+        float height = (float) size.height;
         for (size_t i = 0; i < screen->phoneview.count; ++i) {
             const struct sc_phoneview_control *control =
                 &screen->phoneview.controls[i];
 
             float bx = control->x * width - 38.f;
-            float by = PHONEVIEW_TOOLBAR_H +
-                       control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
+            float by = PHONEVIEW_TOOLBAR_H
+                     + control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
 
             bx = SDL_clamp(bx, 0.f, MAX(0.f, width - 76.f));
             by = SDL_clamp(by, PHONEVIEW_TOOLBAR_H,
@@ -659,17 +662,12 @@ phoneview_render_overlay(struct sc_screen *screen) {
                                 control->label);
         }
     } else {
-        phoneview_draw_box(screen->renderer, 8.f, 8.f, 156.f, 44.f,
-                           7, 11, 18, 225,
-                           76, 134, 234, 155);
-        phoneview_draw_text(screen->renderer, 16.f, 18.f, "PHONEVIEW");
-        phoneview_draw_box(screen->renderer, 92.f, 16.f, 64.f, 28.f,
-                           45, 115, 229, 245,
-                           125, 180, 255, 220);
-        phoneview_draw_text(screen->renderer, 108.f, 24.f, "EDIT");
+        phoneview_draw_box(screen->renderer, 10.f, 10.f, 76.f, 34.f,
+                           45, 115, 229, 255,
+                           140, 195, 255, 235);
+        phoneview_draw_text(screen->renderer, 25.f, 20.f, "EDIT");
     }
 }
-
 static bool
 phoneview_begin_or_finish(struct sc_screen *screen, float x, float y) {
     if (!screen->phoneview.edit_mode) {
@@ -1043,8 +1041,21 @@ sc_screen_update_content_rect(struct sc_screen *screen) {
     bool is_icon = !screen->video || screen->disconnected;
 
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
+
+    // PhoneView owns a real client-area toolbar above the mirrored display.
+    // Reserve that space before computing the video rectangle so the toolbar
+    // never covers the Android image.
+    if (screen->phoneview.enabled && !is_icon
+            && window_size.height > (uint32_t) PHONEVIEW_TOOLBAR_H) {
+        window_size.height -= (uint32_t) PHONEVIEW_TOOLBAR_H;
+    }
+
     compute_content_rect(window_size, screen->content_size, is_icon,
                          screen->render_fit, &screen->rect);
+
+    if (screen->phoneview.enabled && !is_icon) {
+        screen->rect.y += (int32_t) PHONEVIEW_TOOLBAR_H;
+    }
 }
 
 // render the texture to the renderer
