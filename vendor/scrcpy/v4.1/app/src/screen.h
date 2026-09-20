@@ -43,10 +43,12 @@ struct sc_phoneview_control {
     char left_key[32];
     char down_key[32];
     char right_key[32];
+    char look_activation[16];
     float x;
     float y;
     float size;
     float sensitivity;
+    float speed;
     float runtime_x;
     float runtime_y;
     bool active;
