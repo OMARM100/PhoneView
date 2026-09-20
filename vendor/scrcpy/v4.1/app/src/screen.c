@@ -348,6 +348,8 @@ phoneview_push_touch_at(struct sc_screen *screen,
                          enum android_motionevent_action action,
                          float normalized_x,
                          float normalized_y) {
+    (void) control;
+
     if (!screen->controller || !screen->video || !screen->frame_size.width
             || !screen->frame_size.height) {
         return false;
@@ -759,6 +761,9 @@ phoneview_set_capture_status(struct sc_screen *screen, const char *text) {
     sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, true);
     sc_phoneview_ui_set_capture_status(screen->phoneview.ui, text);
 }
+
+static void
+sc_screen_render(struct sc_screen *screen, bool update_content_rect);
 
 static void
 phoneview_capture_keyboard(struct sc_screen *screen,
