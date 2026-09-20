@@ -25,11 +25,11 @@ class DependencyChecker:
         "wget",
         "tar",
         "perl",
-                "libavcodec-dev",
-                "libavformat-dev",
+        "libavcodec-dev",
+        "libavformat-dev",
         "libavutil-dev",
         "libswresample-dev",
-                    )
+    )
 
     def __init__(self):
         self.platform = sys.platform
