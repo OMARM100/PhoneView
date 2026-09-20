@@ -1,30 +1,46 @@
-import hashlib
-import json
 import os
 import platform
 import shutil
 import stat
 import subprocess
-import sys
 import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
 
 
-GITHUB_API = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest"
+PHONEVIEW_SCRCPY_VERSION = "v4.1"
+PHONEVIEW_BUILD_NAME = "v4.1-phoneview"
+
 INSTALL_ROOT = Path.home() / ".local" / "share" / "phoneview" / "scrcpy"
 BIN_ROOT = Path.home() / ".local" / "bin"
 
+SOURCE_URL = (
+    "https://github.com/Genymobile/scrcpy/archive/refs/tags/"
+    f"{PHONEVIEW_SCRCPY_VERSION}.tar.gz"
+)
+SERVER_URL = (
+    "https://github.com/Genymobile/scrcpy/releases/download/"
+    f"{PHONEVIEW_SCRCPY_VERSION}/scrcpy-server-{PHONEVIEW_SCRCPY_VERSION}"
+)
+SERVER_SHA256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae"
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+VENDORED_SRC = PROJECT_ROOT / "vendor" / "scrcpy" / PHONEVIEW_SCRCPY_VERSION / "app" / "src"
+
 
 class ScrcpyInstaller:
-    """Install/update the official stable scrcpy release without apt."""
+    """Build and install PhoneView's pinned, patched scrcpy 4.1 engine."""
+
+    @staticmethod
+    def target_root():
+        return INSTALL_ROOT / PHONEVIEW_BUILD_NAME
 
     @staticmethod
     def local_binary():
         candidates = [
-            BIN_ROOT / "scrcpy",
-            INSTALL_ROOT / "current" / "scrcpy",
+            ScrcpyInstaller.target_root() / "bin" / "scrcpy",
+            BIN_ROOT / "scrcpy-phoneview",
         ]
         for path in candidates:
             if path.is_file() and os.access(path, os.X_OK):
@@ -32,16 +48,8 @@ class ScrcpyInstaller:
         return None
 
     @staticmethod
-    def system_binary():
-        return shutil.which("scrcpy")
-
-    @staticmethod
-    def find_binary():
-        return ScrcpyInstaller.local_binary() or ScrcpyInstaller.system_binary()
-
-    @staticmethod
     def version(binary=None):
-        binary = binary or ScrcpyInstaller.find_binary()
+        binary = binary or ScrcpyInstaller.local_binary()
         if not binary:
             return ""
         try:
@@ -56,16 +64,41 @@ class ScrcpyInstaller:
             return ""
 
     @staticmethod
-    def _latest_release():
-        request = urllib.request.Request(
-            GITHUB_API,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "User-Agent": "PhoneView",
-            },
+    def is_phoneview_build():
+        return ScrcpyInstaller.local_binary() is not None
+
+    @staticmethod
+    def _require_command(command):
+        if shutil.which(command):
+            return
+        raise RuntimeError(
+            f"Required build tool '{command}' is missing. "
+            "Install the scrcpy build dependencies and run setup again."
         )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            return json.loads(response.read().decode("utf-8"))
+
+    @staticmethod
+    def _run(command, cwd=None, env=None, emit=None):
+        if emit:
+            emit("$ " + " ".join(str(item) for item in command))
+
+        result = subprocess.run(
+            command,
+            cwd=str(cwd) if cwd else None,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        output = (result.stdout or "") + (result.stderr or "")
+        if emit and output.strip():
+            for line in output.splitlines():
+                emit(line)
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Command failed with exit code {result.returncode}: "
+                + " ".join(str(item) for item in command)
+            )
 
     @staticmethod
     def install(progress=None, log=None):
@@ -80,136 +113,170 @@ class ScrcpyInstaller:
                 progress(value)
             print(f"PROGRESS:{value}", flush=True)
 
-        if not sys.platform.startswith("linux"):
+        if not sys_platform_linux():
             raise RuntimeError(
-                "The automatic official scrcpy updater currently supports Linux only."
+                "The PhoneView scrcpy build currently supports Linux only."
             )
 
         machine = platform.machine().lower()
         if machine not in ("x86_64", "amd64"):
             raise RuntimeError(
-                f"No official PhoneView installer is configured for Linux architecture: {machine}"
+                f"PhoneView scrcpy 4.1 is currently prepared for Linux x86_64, "
+                f"not {machine}."
             )
 
-        emit("Checking the latest stable scrcpy release from the official GitHub repository...")
-        set_progress(3)
+        required = ("python3", "meson", "ninja", "gcc", "pkg-config", "tar")
+        for command in required:
+            ScrcpyInstaller._require_command(command)
 
-        release = ScrcpyInstaller._latest_release()
-        tag = release.get("tag_name", "")
-        if not tag or release.get("draft") or release.get("prerelease"):
-            raise RuntimeError("GitHub did not return a stable scrcpy release.")
-
-        assets = release.get("assets", [])
-        filename = f"scrcpy-linux-x86_64-{tag}.tar.gz"
-        asset = next((item for item in assets if item.get("name") == filename), None)
-        if not asset:
+        if not VENDORED_SRC.is_dir():
             raise RuntimeError(
-                f"The official release {tag} does not contain the Linux x86_64 archive."
+                f"Patched scrcpy source files were not found at: {VENDORED_SRC}"
             )
 
-        archive_url = asset.get("browser_download_url")
-        expected_digest = asset.get("digest", "")
-        if not archive_url:
-            raise RuntimeError("The official release archive has no download URL.")
+        target_root = ScrcpyInstaller.target_root()
+        target_binary = target_root / "bin" / "scrcpy"
 
-        target_root = INSTALL_ROOT / tag
-        target_bin = target_root / "scrcpy"
-
-        if target_bin.is_file() and os.access(target_bin, os.X_OK):
+        if target_binary.is_file() and os.access(target_binary, os.X_OK):
             BIN_ROOT.mkdir(parents=True, exist_ok=True)
-            link = BIN_ROOT / "scrcpy"
+            link = BIN_ROOT / "scrcpy-phoneview"
             if link.is_symlink() or link.exists():
                 link.unlink()
-            link.symlink_to(target_bin)
-            emit(f"✓ scrcpy {tag} is already installed.")
+            link.symlink_to(target_binary)
+            emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} is already installed.")
             set_progress(100)
-            return str(target_bin)
+            return str(target_binary)
 
         INSTALL_ROOT.mkdir(parents=True, exist_ok=True)
         BIN_ROOT.mkdir(parents=True, exist_ok=True)
 
-        with tempfile.TemporaryDirectory(prefix="phoneview-scrcpy-") as temp:
-            archive = Path(temp) / filename
+        with tempfile.TemporaryDirectory(prefix="phoneview-scrcpy-build-") as temp:
+            temp_root = Path(temp)
+            source_archive = temp_root / f"scrcpy-{PHONEVIEW_SCRCPY_VERSION}.tar.gz"
+            server_file = temp_root / "scrcpy-server"
+            source_root = temp_root / "source"
 
-            emit(f"Downloading official scrcpy {tag}...")
+            emit(f"Preparing pinned scrcpy {PHONEVIEW_SCRCPY_VERSION} source.")
+            set_progress(5)
+
             request = urllib.request.Request(
-                archive_url,
+                SOURCE_URL,
                 headers={"User-Agent": "PhoneView"},
             )
-
-            with urllib.request.urlopen(request, timeout=30) as response, archive.open("wb") as output:
+            with urllib.request.urlopen(request, timeout=30) as response, source_archive.open("wb") as output:
                 total = int(response.headers.get("Content-Length") or 0)
                 received = 0
-
                 while True:
                     chunk = response.read(1024 * 256)
                     if not chunk:
                         break
-
                     output.write(chunk)
                     received += len(chunk)
-
                     if total:
-                        set_progress(10 + (received * 65 / total))
+                        set_progress(5 + (received * 30 / total))
 
-            emit("Verifying the official release checksum...")
-            set_progress(78)
+            emit("Extracting pinned source tree...")
+            with tarfile.open(source_archive, "r:gz") as archive:
+                archive.extractall(temp_root)
 
-            if expected_digest.startswith("sha256:"):
-                expected = expected_digest.split(":", 1)[1].lower()
-                digest = hashlib.sha256(archive.read_bytes()).hexdigest().lower()
+            extracted = [
+                item for item in temp_root.iterdir()
+                if item.is_dir() and item.name.startswith("scrcpy-")
+            ]
+            if not extracted:
+                raise RuntimeError("The scrcpy 4.1 source archive did not extract correctly.")
+            source_root = extracted[0]
 
-                if digest != expected:
-                    raise RuntimeError(
-                        "Checksum verification failed. The downloaded archive was not installed."
-                    )
+            emit("Installing PhoneView's patched scrcpy source files...")
+            for relative in ("screen.c", "screen.h"):
+                source_file = VENDORED_SRC / relative
+                destination = source_root / "app" / "src" / relative
+                shutil.copy2(source_file, destination)
+                emit(f"✓ Patched app/src/{relative}")
 
-                emit("✓ SHA-256 checksum verified.")
-            else:
-                emit("! GitHub did not expose an asset digest; archive verification was skipped.")
-
-            extract_root = Path(temp) / "extract"
-            extract_root.mkdir()
-
-            with tarfile.open(archive, "r:gz") as tar:
-                tar.extractall(extract_root)
-
-            binary = next(
-                (
-                    path
-                    for path in extract_root.rglob("scrcpy")
-                    if path.is_file() and os.access(path, os.X_OK)
-                ),
-                None,
+            emit("Downloading the matching scrcpy 4.1 Android server...")
+            request = urllib.request.Request(
+                SERVER_URL,
+                headers={"User-Agent": "PhoneView"},
             )
+            with urllib.request.urlopen(request, timeout=30) as response, server_file.open("wb") as output:
+                shutil.copyfileobj(response, output)
 
-            if binary is None:
+            digest = __import__("hashlib").sha256(server_file.read_bytes()).hexdigest().lower()
+            if digest != SERVER_SHA256:
                 raise RuntimeError(
-                    "The official archive was downloaded, but scrcpy was not found inside it."
+                    "scrcpy-server SHA-256 verification failed. "
+                    "The server file was not used."
                 )
+            emit("✓ Matching scrcpy-server checksum verified.")
+            set_progress(45)
+
+            build_root = temp_root / "build"
+            install_root = temp_root / "install"
+            install_root.mkdir()
+
+            emit("Configuring the PhoneView scrcpy build...")
+            ScrcpyInstaller._run(
+                [
+                    "meson",
+                    "setup",
+                    str(build_root),
+                    "--buildtype=release",
+                    "--strip",
+                    "-Db_lto=true",
+                    f"-Dprebuilt_server={server_file}",
+                    f"--prefix={install_root}",
+                ],
+                cwd=source_root,
+                emit=emit,
+            )
+            set_progress(60)
+
+            emit("Compiling PhoneView scrcpy 4.1...")
+            ScrcpyInstaller._run(
+                ["ninja", "-C", str(build_root)],
+                cwd=source_root,
+                emit=emit,
+            )
+            set_progress(82)
+
+            emit("Installing the patched scrcpy engine into PhoneView's private directory...")
+            ScrcpyInstaller._run(
+                ["ninja", "-C", str(build_root), "install"],
+                cwd=source_root,
+                emit=emit,
+            )
 
             if target_root.exists():
                 shutil.rmtree(target_root)
+            shutil.copytree(install_root, target_root)
 
-            shutil.copytree(binary.parent, target_root)
+        target_binary = target_root / "bin" / "scrcpy"
+        if not target_binary.is_file():
+            raise RuntimeError(
+                "The patched scrcpy build completed, but the executable was not found."
+            )
 
-        target_bin = target_root / "scrcpy"
-        target_bin.chmod(
-            target_bin.stat().st_mode
+        target_binary.chmod(
+            target_binary.stat().st_mode
             | stat.S_IXUSR
             | stat.S_IXGRP
             | stat.S_IXOTH
         )
 
-        link = BIN_ROOT / "scrcpy"
+        link = BIN_ROOT / "scrcpy-phoneview"
         if link.is_symlink() or link.exists():
             link.unlink()
-        link.symlink_to(target_bin)
+        link.symlink_to(target_binary)
 
-        emit(f"✓ Official scrcpy {tag} installed in {target_root}.")
-        emit(f"✓ PhoneView will use {link} before any old system scrcpy.")
+        emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} installed.")
+        emit("✓ Future upstream scrcpy releases will NOT replace this build.")
         set_progress(100)
-        return str(target_bin)
+        return str(target_binary)
+
+
+def sys_platform_linux():
+    return os.name != "nt" and os.sys.platform.startswith("linux")
 
 
 def main():
