@@ -31,6 +31,7 @@ src = [
     'src/recorder.c',
     'src/scrcpy.c',
     'src/screen.c',
+    'src/phoneview_ui.c',
     'src/sdl_hints.c',
     'src/server.c',
     'src/texture.c',
@@ -129,6 +130,10 @@ dependencies = [
     dependency('libswresample', static: static),
     dependency('sdl3', version: '>= 3.2.0', static: static),
 ]
+
+if host_machine.system() == 'linux'
+    dependencies += dependency('gtk+-3.0', version: '>= 3.20')
+endif
 
 if v4l2_support
     dependencies += dependency('libavdevice', static: static)
