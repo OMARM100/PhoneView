@@ -1112,6 +1112,327 @@ phoneview_dialog_set_key_hint(GtkGrid *grid, int row) {
     gtk_grid_attach(grid, hint, 1, row, 2, 1);
 }
 
+
+static const char *
+phoneview_add_type_title(int add_type) {
+    switch (add_type) {
+        case SC_PHONEVIEW_ADD_KEYBOARD:
+            return "Keyboard Button";
+        case SC_PHONEVIEW_ADD_TAP:
+            return "Tap Key";
+        case SC_PHONEVIEW_ADD_TOGGLE:
+            return "Toggle Key";
+        case SC_PHONEVIEW_ADD_MOUSE:
+            return "Mouse Button";
+        case SC_PHONEVIEW_ADD_LOOK:
+            return "Mouse Look / Camera";
+        case SC_PHONEVIEW_ADD_WHEEL:
+            return "Mouse Wheel";
+        case SC_PHONEVIEW_ADD_JOYSTICK:
+            return "Virtual Joystick";
+        default:
+            return "PhoneView Control";
+    }
+}
+
+static GtkWidget *
+phoneview_dialog_mouse_combo(const char *value) {
+    GtkWidget *combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), "left", "Left");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), "right", "Right");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), "middle", "Middle");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), "x1", "Mouse 4");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo), "x2", "Mouse 5");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo),
+                                value && value[0] ? value : "left");
+    return combo;
+}
+
+static GtkWidget *
+phoneview_dialog_wheel_combo(const char *value) {
+    GtkWidget *combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "wheel_up", "Scroll Up");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "wheel_down", "Scroll Down");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "wheel_left", "Scroll Left");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),
+                              "wheel_right", "Scroll Right");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo),
+                                value && value[0] ? value : "wheel_up");
+    return combo;
+}
+
+bool
+sc_phoneview_ui_configure_new_control(
+    struct sc_phoneview_ui *ui,
+    int add_type,
+    struct sc_phoneview_control_edit *control) {
+    if (!control) {
+        return false;
+    }
+
+    memset(control, 0, sizeof(*control));
+
+    switch (add_type) {
+        case SC_PHONEVIEW_ADD_KEYBOARD:
+            snprintf(control->label, sizeof(control->label), "Key");
+            snprintf(control->type, sizeof(control->type), "keyboard");
+            snprintf(control->behavior, sizeof(control->behavior), "hold");
+            snprintf(control->key, sizeof(control->key), "W");
+            break;
+        case SC_PHONEVIEW_ADD_TAP:
+            snprintf(control->label, sizeof(control->label), "Tap");
+            snprintf(control->type, sizeof(control->type), "keyboard");
+            snprintf(control->behavior, sizeof(control->behavior), "tap");
+            snprintf(control->key, sizeof(control->key), "W");
+            break;
+        case SC_PHONEVIEW_ADD_TOGGLE:
+            snprintf(control->label, sizeof(control->label), "Toggle");
+            snprintf(control->type, sizeof(control->type), "keyboard");
+            snprintf(control->behavior, sizeof(control->behavior), "toggle");
+            snprintf(control->key, sizeof(control->key), "W");
+            break;
+        case SC_PHONEVIEW_ADD_MOUSE:
+            snprintf(control->label, sizeof(control->label), "LMB");
+            snprintf(control->type, sizeof(control->type), "mouse");
+            snprintf(control->mouse_button,
+                     sizeof(control->mouse_button), "left");
+            snprintf(control->behavior, sizeof(control->behavior), "hold");
+            break;
+        case SC_PHONEVIEW_ADD_LOOK:
+            snprintf(control->label, sizeof(control->label), "LOOK");
+            snprintf(control->type, sizeof(control->type), "look");
+            snprintf(control->mouse_button,
+                     sizeof(control->mouse_button), "right");
+            snprintf(control->behavior, sizeof(control->behavior), "hold");
+            control->sensitivity = 1.6f;
+            break;
+        case SC_PHONEVIEW_ADD_WHEEL:
+            snprintf(control->label, sizeof(control->label), "WHEEL");
+            snprintf(control->type, sizeof(control->type), "wheel");
+            snprintf(control->mouse_button,
+                     sizeof(control->mouse_button), "wheel_up");
+            snprintf(control->behavior, sizeof(control->behavior), "tap");
+            break;
+        case SC_PHONEVIEW_ADD_JOYSTICK:
+            snprintf(control->label, sizeof(control->label), "WASD");
+            snprintf(control->type, sizeof(control->type), "joystick");
+            snprintf(control->up_key, sizeof(control->up_key), "W");
+            snprintf(control->left_key, sizeof(control->left_key), "A");
+            snprintf(control->down_key, sizeof(control->down_key), "S");
+            snprintf(control->right_key, sizeof(control->right_key), "D");
+            control->sensitivity = 1.0f;
+            break;
+        default:
+            return false;
+    }
+
+    control->size = 1.0f;
+    if (control->sensitivity <= 0.0f) {
+        control->sensitivity = 1.6f;
+    }
+
+    GtkWindow *parent = ui && ui->window ? GTK_WINDOW(ui->window) : NULL;
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "Add PhoneView Control",
+        parent,
+        GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        "_Cancel", GTK_RESPONSE_CANCEL,
+        "_Add Control", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    gtk_window_set_resizable(GTK_WINDOW(dialog), FALSE);
+    gtk_window_set_default_size(GTK_WINDOW(dialog), 470, -1);
+
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    gtk_widget_set_margin_start(outer, 18);
+    gtk_widget_set_margin_end(outer, 18);
+    gtk_widget_set_margin_top(outer, 16);
+    gtk_widget_set_margin_bottom(outer, 16);
+    gtk_container_add(GTK_CONTAINER(content), outer);
+
+    GtkWidget *heading =
+        gtk_label_new(phoneview_add_type_title(add_type));
+    gtk_label_set_xalign(GTK_LABEL(heading), 0.f);
+    gtk_widget_set_name(heading, "phoneview-editor-heading");
+    gtk_box_pack_start(GTK_BOX(outer), heading, FALSE, FALSE, 0);
+
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    gtk_box_pack_start(GTK_BOX(outer), grid, FALSE, FALSE, 0);
+
+    GtkWidget *label_entry =
+        phoneview_dialog_entry(control->label);
+    phoneview_dialog_add_row(GTK_GRID(grid), 0, "Label", label_entry);
+
+    GtkWidget *behavior_combo = NULL;
+    GtkWidget *key_entry = NULL;
+    GtkWidget *mouse_combo = NULL;
+    GtkWidget *wheel_combo = NULL;
+    GtkWidget *up_entry = NULL;
+    GtkWidget *left_entry = NULL;
+    GtkWidget *down_entry = NULL;
+    GtkWidget *right_entry = NULL;
+    GtkWidget *size_spin = NULL;
+    GtkWidget *sensitivity_spin = NULL;
+
+    int row = 1;
+
+    if (add_type == SC_PHONEVIEW_ADD_KEYBOARD
+            || add_type == SC_PHONEVIEW_ADD_TAP
+            || add_type == SC_PHONEVIEW_ADD_TOGGLE) {
+        behavior_combo =
+            phoneview_dialog_behavior_combo(control->behavior);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Behavior", behavior_combo);
+
+        key_entry = phoneview_dialog_key_entry(control->key);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Key", key_entry);
+        phoneview_dialog_set_key_hint(GTK_GRID(grid), row++);
+    } else if (add_type == SC_PHONEVIEW_ADD_MOUSE
+            || add_type == SC_PHONEVIEW_ADD_LOOK) {
+        mouse_combo = phoneview_dialog_mouse_combo(control->mouse_button);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Mouse Button", mouse_combo);
+
+        if (add_type == SC_PHONEVIEW_ADD_LOOK) {
+            sensitivity_spin =
+                gtk_spin_button_new_with_range(0.1, 5.0, 0.1);
+            gtk_spin_button_set_value(
+                GTK_SPIN_BUTTON(sensitivity_spin),
+                control->sensitivity);
+            gtk_spin_button_set_digits(
+                GTK_SPIN_BUTTON(sensitivity_spin), 1);
+            phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                     "Look Sensitivity",
+                                     sensitivity_spin);
+        }
+    } else if (add_type == SC_PHONEVIEW_ADD_WHEEL) {
+        wheel_combo = phoneview_dialog_wheel_combo(
+            control->mouse_button);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++,
+                                 "Direction", wheel_combo);
+    } else if (add_type == SC_PHONEVIEW_ADD_JOYSTICK) {
+        up_entry = phoneview_dialog_key_entry(control->up_key);
+        left_entry = phoneview_dialog_key_entry(control->left_key);
+        down_entry = phoneview_dialog_key_entry(control->down_key);
+        right_entry = phoneview_dialog_key_entry(control->right_key);
+
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Up", up_entry);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Left", left_entry);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Down", down_entry);
+        phoneview_dialog_add_row(GTK_GRID(grid), row++, "Right", right_entry);
+        phoneview_dialog_set_key_hint(GTK_GRID(grid), row++);
+    }
+
+    size_spin =
+        gtk_spin_button_new_with_range(50.0, 300.0, 5.0);
+    gtk_spin_button_set_value(GTK_SPIN_BUTTON(size_spin), 100.0);
+    gtk_spin_button_set_numeric(GTK_SPIN_BUTTON(size_spin), TRUE);
+    gtk_entry_set_width_chars(GTK_ENTRY(size_spin), 8);
+    phoneview_dialog_add_row(GTK_GRID(grid), row++, "Size %", size_spin);
+    gtk_widget_set_name(size_spin, "phoneview-editor-size");
+
+    GtkWidget *hint = gtk_label_new(
+        "After adding, drag the control directly on the phone screen. "
+        "Double-click it anytime to edit it again.");
+    gtk_label_set_xalign(GTK_LABEL(hint), 0.f);
+    gtk_widget_set_margin_top(hint, 4);
+    gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
+    gtk_box_pack_start(GTK_BOX(outer), hint, FALSE, FALSE, 0);
+
+    gtk_widget_show_all(dialog);
+    gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+    bool apply = response == GTK_RESPONSE_ACCEPT;
+
+    if (apply) {
+        const char *label = gtk_entry_get_text(GTK_ENTRY(label_entry));
+        if (!label || !label[0]) {
+            apply = false;
+        } else {
+            snprintf(control->label, sizeof(control->label), "%s", label);
+        }
+
+        if (behavior_combo) {
+            const char *id =
+                gtk_combo_box_get_active_id(
+                    GTK_COMBO_BOX(behavior_combo));
+            if (id && id[0]) {
+                snprintf(control->behavior,
+                         sizeof(control->behavior), "%s", id);
+            }
+        }
+
+        if (key_entry) {
+            const char *key =
+                gtk_entry_get_text(GTK_ENTRY(key_entry));
+            if (!key || !key[0]) {
+                apply = false;
+            } else {
+                snprintf(control->key,
+                         sizeof(control->key), "%s", key);
+            }
+        }
+
+        if (mouse_combo) {
+            const char *id =
+                gtk_combo_box_get_active_id(
+                    GTK_COMBO_BOX(mouse_combo));
+            if (id && id[0]) {
+                snprintf(control->mouse_button,
+                         sizeof(control->mouse_button), "%s", id);
+            }
+        }
+
+        if (wheel_combo) {
+            const char *id =
+                gtk_combo_box_get_active_id(
+                    GTK_COMBO_BOX(wheel_combo));
+            if (id && id[0]) {
+                snprintf(control->mouse_button,
+                         sizeof(control->mouse_button), "%s", id);
+            }
+        }
+
+        if (up_entry && left_entry && down_entry && right_entry) {
+            const char *up = gtk_entry_get_text(GTK_ENTRY(up_entry));
+            const char *left = gtk_entry_get_text(GTK_ENTRY(left_entry));
+            const char *down = gtk_entry_get_text(GTK_ENTRY(down_entry));
+            const char *right = gtk_entry_get_text(GTK_ENTRY(right_entry));
+
+            if (!up[0] || !left[0] || !down[0] || !right[0]) {
+                apply = false;
+            } else {
+                snprintf(control->up_key, sizeof(control->up_key), "%s", up);
+                snprintf(control->left_key,
+                         sizeof(control->left_key), "%s", left);
+                snprintf(control->down_key,
+                         sizeof(control->down_key), "%s", down);
+                snprintf(control->right_key,
+                         sizeof(control->right_key), "%s", right);
+            }
+        }
+
+        double size_percent =
+            gtk_spin_button_get_value(GTK_SPIN_BUTTON(size_spin));
+        control->size = (float) size_percent / 100.0f;
+        control->size = SDL_clamp(control->size, 0.5f, 3.0f);
+
+        if (sensitivity_spin) {
+            control->sensitivity =
+                (float) gtk_spin_button_get_value(
+                    GTK_SPIN_BUTTON(sensitivity_spin));
+        }
+    }
+
+    gtk_widget_destroy(dialog);
+    return apply;
+}
+
 bool
 sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
                              struct sc_phoneview_control_edit *control) {
