@@ -441,7 +441,9 @@ phoneview_find_wheel_control(struct sc_screen *screen, const char *direction,
         struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
 
-        if (!strcmp(control->type, "wheel")
+        if ((!strcmp(control->type, "wheel")
+                || (!strcmp(control->type, "mouse")
+                    && !strncmp(control->mouse_button, "wheel_", 6)))
                 && !strcmp(control->mouse_button, direction)) {
             if (index_out) *index_out = i;
             return control;
