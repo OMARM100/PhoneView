@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 PHONEVIEW_SCRCPY_VERSION = "v4.1"
-PHONEVIEW_BUILD_NAME = "v4.1-phoneview-pulse"
+PHONEVIEW_BUILD_NAME = "v4.1-phoneview-toolbar"
 
 INSTALL_ROOT = Path.home() / ".local" / "share" / "phoneview" / "scrcpy"
 BIN_ROOT = Path.home() / ".local" / "bin"
