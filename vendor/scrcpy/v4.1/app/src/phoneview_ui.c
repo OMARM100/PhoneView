@@ -970,6 +970,17 @@ sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui) {
     return ui ? ui->add_type : SC_PHONEVIEW_ADD_KEYBOARD;
 }
 
+void
+sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
+                                    const char *status) {
+    if (!ui || !ui->status_label) {
+        return;
+    }
+
+    gtk_label_set_text(GTK_LABEL(ui->status_label),
+                       status ? status : "");
+}
+
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui) {
     return ui && ui->edit_mode;
@@ -1096,6 +1107,13 @@ int
 sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui) {
     (void) ui;
     return SC_PHONEVIEW_ADD_KEYBOARD;
+}
+
+void
+sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
+                                    const char *status) {
+    (void) ui;
+    (void) status;
 }
 
 bool
