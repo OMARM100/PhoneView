@@ -24,7 +24,8 @@
 #define DOWNCAST(SINK) container_of(SINK, struct sc_screen, frame_sink)
 
 #define PHONEVIEW_MAX_CONTROLS 64
-#define PHONEVIEW_TOOLBAR_H 58.f
+#define PHONEVIEW_CONTROL_W 76.f
+#define PHONEVIEW_CONTROL_H 42.f
 
 static void
 phoneview_config_path(char *path, size_t size) {
@@ -260,30 +261,16 @@ phoneview_hit_control(struct sc_screen *screen, float x, float y,
         const struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
 
-        float bx = control->x * width - 38.f;
-        float by = PHONEVIEW_TOOLBAR_H +
-                   control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
+        float bx = control->x * width - PHONEVIEW_CONTROL_W / 2.f;
+        float by = control->y * height - PHONEVIEW_CONTROL_H / 2.f;
 
-        if (phoneview_point_in_rect(x, y, bx, by, 76.f, 42.f)) {
+        if (phoneview_point_in_rect(x, y, bx, by,
+                                     PHONEVIEW_CONTROL_W,
+                                     PHONEVIEW_CONTROL_H)) {
             return (int) i;
         }
     }
     return -1;
-}
-
-static bool
-phoneview_toolbar_edit_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 100.f, 9.f, 78.f, 40.f);
-}
-
-static bool
-phoneview_toolbar_add_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 100.f, 9.f, 96.f, 40.f);
-}
-
-static bool
-phoneview_toolbar_done_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 204.f, 9.f, 76.f, 40.f);
 }
 
 static struct sc_phoneview_control *
@@ -331,9 +318,7 @@ phoneview_push_touch(struct sc_screen *screen,
 
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
     float wx = control->x * (float) window_size.width;
-    float wy = PHONEVIEW_TOOLBAR_H
-             + control->y
-               * ((float) window_size.height - PHONEVIEW_TOOLBAR_H);
+    float wy = control->y * (float) window_size.height;
 
     struct sc_point point =
         sc_screen_convert_window_to_frame_coords(screen, (int32_t) wx,
@@ -487,6 +472,8 @@ phoneview_capture_keyboard(struct sc_screen *screen,
 
     screen->phoneview.capture_mode = false;
     phoneview_save_controls(screen);
+    sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
+    sc_screen_render(screen, false);
 }
 
 static void
@@ -605,79 +592,30 @@ phoneview_draw_text(SDL_Renderer *renderer, float x, float y,
 }
 
 static void
-phoneview_render_overlay(struct sc_screen *screen) {
-    if (!screen->phoneview.enabled || !screen->window_shown) {
+phoneview_render_controls(struct sc_screen *screen) {
+    if (!screen->phoneview.enabled
+            || !screen->phoneview.edit_mode
+            || !screen->window_shown) {
         return;
     }
 
     struct sc_size size = sc_sdl_get_window_size(screen->window);
     float width = (float) size.width;
-
-    /*
-     * PhoneView application toolbar.
-     *
-     * This is a dedicated client-area strip above the Android viewport.
-     * It is intentionally not drawn over the phone texture.
-     */
-    SDL_SetRenderDrawColor(screen->renderer, 20, 24, 31, 255);
-    SDL_FRect toolbar = {0.f, 0.f, width, PHONEVIEW_TOOLBAR_H};
-    SDL_RenderFillRect(screen->renderer, &toolbar);
-
-    /* Bottom separator */
-    SDL_SetRenderDrawColor(screen->renderer, 55, 62, 74, 255);
-    SDL_FRect separator = {0.f, PHONEVIEW_TOOLBAR_H - 1.f, width, 1.f};
-    SDL_RenderFillRect(screen->renderer, &separator);
-
-    /* Application name */
-    phoneview_draw_text(screen->renderer, 14.f, 21.f, "PhoneView");
-
-    if (!screen->phoneview.edit_mode) {
-        /* Normal mode: one clear EDIT toolbar button. */
-        phoneview_draw_box(screen->renderer, 100.f, 9.f, 78.f, 40.f,
-                           38, 92, 168, 255,
-                           105, 160, 220, 255);
-        phoneview_draw_text(screen->renderer, 122.f, 24.f, "EDIT");
-        return;
-    }
-
-    /* Edit mode: standard left-to-right toolbar actions. */
-    phoneview_draw_box(screen->renderer, 100.f, 9.f, 96.f, 40.f,
-                       43, 107, 190, 255,
-                       125, 180, 235, 255);
-    phoneview_draw_text(screen->renderer, 113.f, 24.f, "ADD BUTTON");
-
-    phoneview_draw_box(screen->renderer, 204.f, 9.f, 76.f, 40.f,
-                       48, 132, 83, 255,
-                       135, 220, 165, 255);
-    phoneview_draw_text(screen->renderer, 225.f, 24.f, "DONE");
-
-    if (screen->phoneview.capture_mode) {
-        phoneview_draw_box(screen->renderer, 288.f, 9.f, 90.f, 40.f,
-                           122, 82, 35, 255,
-                           235, 190, 105, 255);
-        phoneview_draw_text(screen->renderer, 300.f, 24.f, "CAPTURE");
-    }
-
-    /* A subtle edit-state indicator at the right side. */
-    if (!screen->phoneview.capture_mode) {
-        phoneview_draw_text(screen->renderer, 300.f, 24.f,
-                            "Edit mode");
-    }
-
     float height = (float) size.height;
+
     for (size_t i = 0; i < screen->phoneview.count; ++i) {
         const struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
 
-        float bx = control->x * width - 38.f;
-        float by = PHONEVIEW_TOOLBAR_H
-                 + control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
+        float bx = control->x * width - PHONEVIEW_CONTROL_W / 2.f;
+        float by = control->y * height - PHONEVIEW_CONTROL_H / 2.f;
 
-        bx = SDL_clamp(bx, 0.f, MAX(0.f, width - 76.f));
-        by = SDL_clamp(by, PHONEVIEW_TOOLBAR_H,
-                       MAX(PHONEVIEW_TOOLBAR_H, height - 42.f));
+        bx = SDL_clamp(bx, 0.f, MAX(0.f, width - PHONEVIEW_CONTROL_W));
+        by = SDL_clamp(by, 0.f, MAX(0.f, height - PHONEVIEW_CONTROL_H));
 
-        phoneview_draw_box(screen->renderer, bx, by, 76.f, 42.f,
+        phoneview_draw_box(screen->renderer,
+                           bx, by,
+                           PHONEVIEW_CONTROL_W, PHONEVIEW_CONTROL_H,
                            32, 115, 229, 220,
                            255, 255, 255, 210);
         phoneview_draw_text(screen->renderer, bx + 8.f, by + 17.f,
@@ -685,31 +623,50 @@ phoneview_render_overlay(struct sc_screen *screen) {
     }
 }
 
-static bool
-phoneview_begin_or_finish(struct sc_screen *screen, float x, float y) {
-    if (!screen->phoneview.edit_mode) {
-        if (phoneview_toolbar_edit_hit(x, y)) {
+static void
+phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
+    struct sc_screen *screen = userdata;
+    if (!screen || !screen->phoneview.enabled) {
+        return;
+    }
+
+    switch (action) {
+        case SC_PHONEVIEW_UI_ACTION_EDIT:
             phoneview_load_controls(screen);
             screen->phoneview.edit_mode = true;
             screen->phoneview.capture_mode = false;
-            return true;
-        }
-        return false;
-    }
+            screen->phoneview.dragging = false;
+            screen->phoneview.drag_index = -1;
+            sc_phoneview_ui_set_edit_mode(screen->phoneview.ui, true);
+            sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
+            sc_screen_render(screen, false);
+            break;
 
-    if (phoneview_toolbar_add_hit(x, y)) {
-        screen->phoneview.capture_mode = true;
-        return true;
-    }
+        case SC_PHONEVIEW_UI_ACTION_ADD:
+            if (!screen->phoneview.edit_mode) {
+                break;
+            }
+            screen->phoneview.capture_mode = true;
+            screen->phoneview.dragging = false;
+            screen->phoneview.drag_index = -1;
+            sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, true);
+            break;
 
-    if (phoneview_toolbar_done_hit(x, y)) {
-        screen->phoneview.capture_mode = false;
-        screen->phoneview.edit_mode = false;
-        phoneview_save_controls(screen);
-        return true;
-    }
+        case SC_PHONEVIEW_UI_ACTION_DONE:
+            screen->phoneview.capture_mode = false;
+            screen->phoneview.edit_mode = false;
+            screen->phoneview.dragging = false;
+            screen->phoneview.drag_index = -1;
+            phoneview_save_controls(screen);
+            sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
+            sc_phoneview_ui_set_edit_mode(screen->phoneview.ui, false);
+            sc_screen_render(screen, false);
+            break;
 
-    return false;
+        case SC_PHONEVIEW_UI_ACTION_CLOSE:
+            sc_push_event(SDL_EVENT_QUIT);
+            break;
+    }
 }
 
 static bool
@@ -743,11 +700,14 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
     }
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
-        if (!screen->phoneview.edit_mode || !screen->phoneview.capture_mode) {
-            return false;
+        if (!screen->phoneview.edit_mode
+                || !screen->phoneview.capture_mode) {
+            return screen->phoneview.edit_mode;
         }
+
         if (event->key.key == SDLK_ESCAPE) {
             screen->phoneview.capture_mode = false;
+            sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
             return true;
         }
 
@@ -755,10 +715,16 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         return true;
     }
 
+    if (event->type == SDL_EVENT_KEY_UP
+            && screen->phoneview.edit_mode) {
+        return true;
+    }
+
     if (event->type == SDL_EVENT_MOUSE_WHEEL
-            && screen->phoneview.edit_mode
-            && screen->phoneview.capture_mode) {
-        phoneview_capture_wheel(screen, event->wheel.x, event->wheel.y);
+            && screen->phoneview.edit_mode) {
+        if (screen->phoneview.capture_mode) {
+            phoneview_capture_wheel(screen, event->wheel.x, event->wheel.y);
+        }
         return true;
     }
 
@@ -766,28 +732,22 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         float x = event->button.x;
         float y = event->button.y;
 
-        /*
-         * Toolbar owns every mouse click in its client-area strip.
-         * Never let toolbar clicks fall through to the Android viewport.
-         */
-        if (y >= 0.f && y < PHONEVIEW_TOOLBAR_H) {
-            if (event->button.button == SDL_BUTTON_LEFT
-                    && phoneview_begin_or_finish(screen, x, y)) {
-                return true;
-            }
-            return true;
-        }
-
         if (screen->phoneview.edit_mode && screen->phoneview.capture_mode) {
-            phoneview_capture_mouse(screen, event->button.button);
+            if (event->button.button == SDL_BUTTON_LEFT
+                    || event->button.button == SDL_BUTTON_RIGHT
+                    || event->button.button == SDL_BUTTON_MIDDLE
+                    || event->button.button == SDL_BUTTON_X1
+                    || event->button.button == SDL_BUTTON_X2) {
+                phoneview_capture_mouse(screen, event->button.button);
+            }
             return true;
         }
 
         if (event->button.button == SDL_BUTTON_RIGHT
                 && screen->phoneview.edit_mode) {
+            struct sc_size size = sc_sdl_get_window_size(screen->window);
             int index = phoneview_hit_control(
-                screen, x, y, (float) sc_sdl_get_window_size(screen->window).width,
-                (float) sc_sdl_get_window_size(screen->window).height);
+                screen, x, y, (float) size.width, (float) size.height);
             if (index >= 0) {
                 for (size_t i = (size_t) index;
                      i + 1 < screen->phoneview.count; ++i) {
@@ -796,53 +756,57 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 }
                 screen->phoneview.count--;
                 phoneview_save_controls(screen);
-                return true;
+                sc_screen_render(screen, false);
             }
+            return true;
         }
 
         if (event->button.button == SDL_BUTTON_LEFT
                 && screen->phoneview.edit_mode) {
             struct sc_size size = sc_sdl_get_window_size(screen->window);
-            int index = phoneview_hit_control(screen, x, y,
-                                              (float) size.width,
-                                              (float) size.height);
+            int index = phoneview_hit_control(
+                screen, x, y, (float) size.width, (float) size.height);
             if (index >= 0) {
                 screen->phoneview.dragging = true;
                 screen->phoneview.drag_index = index;
-                return true;
             }
+            return true;
+        }
+
+        if (screen->phoneview.edit_mode) {
+            return true;
         }
     }
 
     if (event->type == SDL_EVENT_MOUSE_MOTION
-            && screen->phoneview.edit_mode
-            && screen->phoneview.dragging) {
+            && screen->phoneview.edit_mode) {
+        if (!screen->phoneview.dragging) {
+            return true;
+        }
+
         struct sc_size size = sc_sdl_get_window_size(screen->window);
         float x = SDL_clamp(event->motion.x, 0.f, (float) size.width);
-        float y = SDL_clamp(event->motion.y, PHONEVIEW_TOOLBAR_H,
-                            (float) size.height);
+        float y = SDL_clamp(event->motion.y, 0.f, (float) size.height);
 
         if (screen->phoneview.drag_index >= 0
                 && (size_t) screen->phoneview.drag_index < screen->phoneview.count) {
             struct sc_phoneview_control *control =
                 &screen->phoneview.controls[screen->phoneview.drag_index];
 
-            control->x = SDL_clamp(x / (float) size.width, 0.f, 1.f);
-            control->y = SDL_clamp(
-                (y - PHONEVIEW_TOOLBAR_H)
-                    / MAX(1.f, (float) size.height - PHONEVIEW_TOOLBAR_H),
-                0.f, 1.f);
-            return true;
+            control->x = SDL_clamp(x / MAX(1.f, (float) size.width), 0.f, 1.f);
+            control->y = SDL_clamp(y / MAX(1.f, (float) size.height), 0.f, 1.f);
         }
+        return true;
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP
             && event->button.button == SDL_BUTTON_LEFT
-            && screen->phoneview.edit_mode
-            && screen->phoneview.dragging) {
-        screen->phoneview.dragging = false;
-        screen->phoneview.drag_index = -1;
-        phoneview_save_controls(screen);
+            && screen->phoneview.edit_mode) {
+        if (screen->phoneview.dragging) {
+            screen->phoneview.dragging = false;
+            screen->phoneview.drag_index = -1;
+            phoneview_save_controls(screen);
+        }
         return true;
     }
 
@@ -877,6 +841,10 @@ get_oriented_size(struct sc_size size, enum sc_orientation orientation) {
 
 static inline bool
 is_windowed(struct sc_screen *screen) {
+    if (screen->phoneview.ui) {
+        return true;
+    }
+
     return !(SDL_GetWindowFlags(screen->window) & (SDL_WINDOW_FULLSCREEN
                                                  | SDL_WINDOW_MINIMIZED
                                                  | SDL_WINDOW_MAXIMIZED));
@@ -1063,20 +1031,8 @@ sc_screen_update_content_rect(struct sc_screen *screen) {
 
     struct sc_size window_size = sc_sdl_get_window_size(screen->window);
 
-    // PhoneView owns a real client-area toolbar above the mirrored display.
-    // Reserve that space before computing the video rectangle so the toolbar
-    // never covers the Android image.
-    if (screen->phoneview.enabled && !is_icon
-            && window_size.height > (uint32_t) PHONEVIEW_TOOLBAR_H) {
-        window_size.height -= (uint32_t) PHONEVIEW_TOOLBAR_H;
-    }
-
     compute_content_rect(window_size, screen->content_size, is_icon,
                          screen->render_fit, &screen->rect);
-
-    if (screen->phoneview.enabled && !is_icon) {
-        screen->rect.y += (int32_t) PHONEVIEW_TOOLBAR_H;
-    }
 }
 
 // render the texture to the renderer
@@ -1154,7 +1110,7 @@ sc_screen_render(struct sc_screen *screen, bool update_content_rect) {
     }
 
 end:
-    phoneview_render_overlay(screen);
+    phoneview_render_controls(screen);
     sc_sdl_render_present(renderer);
 }
 
@@ -1329,6 +1285,73 @@ sc_screen_frame_sink_push_session(struct sc_frame_sink *sink,
     return true;
 }
 
+static void
+phoneview_set_window_size(struct sc_screen *screen,
+                          struct sc_size video_size) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_set_window_size(screen->phoneview.ui,
+                                        video_size.width,
+                                        video_size.height);
+    } else {
+        sc_sdl_set_window_size(screen->window, video_size);
+    }
+}
+
+static void
+phoneview_set_window_position(struct sc_screen *screen,
+                              struct sc_point position) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_set_window_position(screen->phoneview.ui,
+                                            position.x,
+                                            position.y);
+    } else {
+        phoneview_set_window_position(screen, position);
+    }
+}
+
+static void
+phoneview_show_window(struct sc_screen *screen) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_show(screen->phoneview.ui);
+    } else {
+        phoneview_show_window(screen);
+    }
+}
+
+static void
+phoneview_hide_window(struct sc_screen *screen) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_hide(screen->phoneview.ui);
+    } else {
+        phoneview_hide_window(screen);
+    }
+}
+
+static void
+phoneview_toggle_fullscreen(struct sc_screen *screen, bool fullscreen) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_set_fullscreen(screen->phoneview.ui, fullscreen);
+        return;
+    }
+
+    bool ok = SDL_SetWindowFullscreen(screen->window, fullscreen);
+    if (!ok) {
+        LOGW("Could not switch fullscreen mode: %s", SDL_GetError());
+    }
+}
+
+static void
+phoneview_destroy_window(struct sc_screen *screen) {
+    if (screen->phoneview.ui) {
+        sc_phoneview_ui_destroy(screen->phoneview.ui);
+        screen->phoneview.ui = NULL;
+        screen->window = NULL;
+    } else if (screen->window) {
+        SDL_DestroyWindow(screen->window);
+        screen->window = NULL;
+    }
+}
+
 bool
 sc_screen_init(struct sc_screen *screen,
                const struct sc_screen_params *params) {
@@ -1344,6 +1367,7 @@ sc_screen_init(struct sc_screen *screen,
 
     memset(&screen->phoneview, 0, sizeof(screen->phoneview));
     screen->phoneview.enabled = getenv("PHONEVIEW_MAPPING") != NULL;
+    screen->phoneview.ui = NULL;
     screen->phoneview.drag_index = -1;
     if (screen->phoneview.enabled) {
         phoneview_load_controls(screen);
@@ -1427,12 +1451,35 @@ sc_screen_init(struct sc_screen *screen,
         height = params->window_height;
     }
 
-    // The window will be positioned and sized on first video frame
-    screen->window =
-        sc_sdl_create_window(title, x, y, width, height, window_flags);
-    if (!screen->window) {
-        LOGE("Could not create window: %s", SDL_GetError());
-        goto error_destroy_fps_counter;
+    // PhoneView uses a real GTK top-level window and a native SDL child
+    // window for the Android video surface. This keeps the toolbar outside
+    // the video renderer while remaining part of the same application window.
+    if (screen->phoneview.enabled && params->video) {
+        screen->phoneview.ui =
+            sc_phoneview_ui_create(title,
+                                   width,
+                                   height,
+                                   params->always_on_top,
+                                   !params->window_borderless,
+                                   phoneview_ui_action_cb,
+                                   screen);
+        if (!screen->phoneview.ui) {
+            goto error_destroy_fps_counter;
+        }
+
+        screen->window =
+            sc_phoneview_ui_get_video_window(screen->phoneview.ui);
+        if (!screen->window) {
+            LOGE("Could not create PhoneView video surface");
+            goto error_destroy_window;
+        }
+    } else {
+        screen->window =
+            sc_sdl_create_window(title, x, y, width, height, window_flags);
+        if (!screen->window) {
+            LOGE("Could not create window: %s", SDL_GetError());
+            goto error_destroy_fps_counter;
+        }
     }
 
     screen->renderer = SDL_CreateRenderer(screen->window, NULL);
@@ -1557,7 +1604,7 @@ sc_screen_init(struct sc_screen *screen,
     if (!screen->video) {
         // Show the window immediately
         screen->window_shown = true;
-        sc_sdl_show_window(screen->window);
+        phoneview_show_window(screen);
 
         if (sc_screen_is_relative_mode(screen)) {
             // Capture mouse immediately if video mirroring is disabled
@@ -1577,7 +1624,7 @@ error_destroy_renderer:
 #endif
     SDL_DestroyRenderer(screen->renderer);
 error_destroy_window:
-    SDL_DestroyWindow(screen->window);
+    phoneview_destroy_window(screen);
 error_destroy_fps_counter:
     sc_fps_counter_destroy(&screen->fps_counter);
 error_destroy_frame_buffer:
@@ -1613,8 +1660,8 @@ sc_screen_show_initial_window(struct sc_screen *screen) {
 
     assert(is_windowed(screen));
     set_aspect_ratio(screen, screen->content_size);
-    sc_sdl_set_window_size(screen->window, window_size);
-    sc_sdl_set_window_position(screen->window, position);
+    phoneview_set_window_size(screen, window_size);
+    phoneview_set_window_position(screen, position);
 
     if (screen->req.fullscreen) {
         sc_screen_toggle_fullscreen(screen);
@@ -1625,13 +1672,13 @@ sc_screen_show_initial_window(struct sc_screen *screen) {
     }
 
     screen->window_shown = true;
-    sc_sdl_show_window(screen->window);
+    phoneview_show_window(screen);
     sc_screen_update_content_rect(screen);
 }
 
 void
 sc_screen_hide_window(struct sc_screen *screen) {
-    sc_sdl_hide_window(screen->window);
+    phoneview_hide_window(screen);
     screen->window_shown = false;
 }
 
@@ -1669,7 +1716,7 @@ sc_screen_destroy(struct sc_screen *screen) {
     SDL_GL_DestroyContext(screen->gl_context);
 #endif
     SDL_DestroyRenderer(screen->renderer);
-    SDL_DestroyWindow(screen->window);
+    phoneview_destroy_window(screen);
     sc_fps_counter_destroy(&screen->fps_counter);
     sc_frame_buffer_destroy(&screen->fb);
     sc_mutex_destroy(&screen->mutex);
@@ -1710,7 +1757,7 @@ resize_for_content(struct sc_screen *screen, struct sc_size old_content_size,
     target_size = get_optimal_size(target_size, new_content_size, true);
     assert(is_windowed(screen));
     set_aspect_ratio(screen, new_content_size);
-    sc_sdl_set_window_size(screen->window, target_size);
+    phoneview_set_window_size(screen, target_size);
 }
 
 static void
@@ -1873,18 +1920,21 @@ sc_screen_set_paused(struct sc_screen *screen, bool paused) {
 
 void
 sc_screen_toggle_fullscreen(struct sc_screen *screen) {
-    assert(screen->video);
+    bool fullscreen = !(SDL_GetWindowFlags(screen->window) & SDL_WINDOW_FULLSCREEN);
+    if (screen->phoneview.ui) {
+        GtkWidget *unused = NULL;
+        (void) unused;
+        sc_phoneview_ui_set_fullscreen(screen->phoneview.ui, fullscreen);
+        return;
+    }
 
-    bool req_fullscreen =
-        !(SDL_GetWindowFlags(screen->window) & SDL_WINDOW_FULLSCREEN);
-
-    bool ok = SDL_SetWindowFullscreen(screen->window, req_fullscreen);
+    bool ok = SDL_SetWindowFullscreen(screen->window, fullscreen);
     if (!ok) {
         LOGW("Could not switch fullscreen mode: %s", SDL_GetError());
         return;
     }
 
-    LOGD("Requested %s mode", req_fullscreen ? "fullscreen" : "windowed");
+    LOGD("Requested %s mode", fullscreen ? "fullscreen" : "windowed");
 }
 
 void
@@ -1905,7 +1955,7 @@ sc_screen_resize_to_fit(struct sc_screen *screen) {
     if (screen->render_fit == SC_RENDER_FIT_UNSCALED) {
         struct sc_size content_size = screen->content_size;
         set_aspect_ratio(screen, content_size);
-        sc_sdl_set_window_size(screen->window, content_size);
+        phoneview_set_window_size(screen, content_size);
 
         int32_t x_offset = 0;
         if (content_size.width < window_size.width) {
@@ -1920,7 +1970,7 @@ sc_screen_resize_to_fit(struct sc_screen *screen) {
             struct sc_point pos = sc_sdl_get_window_position(screen->window);
             pos.x += x_offset;
             pos.y += y_offset;
-            sc_sdl_set_window_position(screen->window, pos);
+            phoneview_set_window_position(screen, pos);
         }
 
         LOGD("Resized to content size: %ux%u", content_size.width,
@@ -1945,8 +1995,8 @@ sc_screen_resize_to_fit(struct sc_screen *screen) {
     };
 
     set_aspect_ratio(screen, screen->content_size);
-    sc_sdl_set_window_size(screen->window, optimal_size);
-    sc_sdl_set_window_position(screen->window, new_position);
+    phoneview_set_window_size(screen, optimal_size);
+    phoneview_set_window_position(screen, new_position);
     LOGD("Resized to optimal size: %ux%u", optimal_size.width,
                                            optimal_size.height);
 }
@@ -1961,7 +2011,7 @@ sc_screen_resize_to_pixel_perfect(struct sc_screen *screen) {
 
     struct sc_size content_size = screen->content_size;
     set_aspect_ratio(screen, content_size);
-    sc_sdl_set_window_size(screen->window, content_size);
+    phoneview_set_window_size(screen, content_size);
     LOGD("Resized to pixel-perfect: %ux%u", content_size.width,
                                             content_size.height);
 }
@@ -1985,6 +2035,13 @@ sc_disconnect_on_timeout(struct sc_disconnect *d, void *userdata) {
 
     bool ok = sc_push_event(SC_EVENT_DISCONNECTED_TIMEOUT);
     (void) ok; // ignore failure
+}
+
+void
+sc_screen_pump_ui_events(struct sc_screen *screen) {
+    if (screen && screen->phoneview.ui) {
+        sc_phoneview_ui_pump_events(screen->phoneview.ui);
+    }
 }
 
 void
@@ -2096,7 +2153,12 @@ sc_screen_handle_disconnection(struct sc_screen *screen) {
     }
 
     SDL_Event event;
-    while (SDL_WaitEvent(&event)) {
+    while (true) {
+        if (!SDL_WaitEventTimeout(&event, 10)) {
+            sc_screen_pump_ui_events(screen);
+            continue;
+        }
+        sc_screen_pump_ui_events(screen);
         switch (event.type) {
             case SDL_EVENT_WINDOW_EXPOSED:
                 sc_screen_render(screen, true);
