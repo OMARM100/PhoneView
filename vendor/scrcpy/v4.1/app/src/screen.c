@@ -31,6 +31,9 @@
 #define PHONEVIEW_DOUBLE_CLICK_MS 450
 
 static void
+sc_screen_render(struct sc_screen *screen, bool update_content_rect);
+
+static void
 phoneview_config_path(char *path, size_t size) {
     const char *home = getenv("HOME");
     if (!home) {
@@ -766,9 +769,6 @@ phoneview_set_capture_status(struct sc_screen *screen, const char *text) {
     sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, true);
     sc_phoneview_ui_set_capture_status(screen->phoneview.ui, text);
 }
-
-static void
-sc_screen_render(struct sc_screen *screen, bool update_content_rect);
 
 static void
 phoneview_capture_keyboard(struct sc_screen *screen,
