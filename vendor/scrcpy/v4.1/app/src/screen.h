@@ -45,6 +45,8 @@ struct sc_phoneview_control {
     char right_key[32];
     float x;
     float y;
+    float size;
+    float sensitivity;
     float runtime_x;
     float runtime_y;
     bool active;
@@ -61,8 +63,12 @@ struct sc_phoneview_state {
     bool edit_mode;
     bool capture_mode;
     bool dragging;
+    bool resizing;
     int capture_stage;
     int drag_index;
+    int resize_index;
+    float resize_start_size;
+    float resize_start_distance;
     int selected_index;
     uint64_t last_click_time;
     int last_click_index;
