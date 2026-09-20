@@ -22,33 +22,8 @@ class ScrcpyManager:
 
     @staticmethod
     def _find_scrcpy():
-        managed = ScrcpyInstaller.local_binary()
-        if managed:
-            return managed
-
-        exe = shutil.which("scrcpy")
-        if exe:
-            return exe
-
-        candidates = []
-        if os.name == "nt":
-            candidates = [
-                os.path.expandvars(r"%ProgramFiles%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%ProgramFiles(x86)%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%USERPROFILE%\scoop\apps\scrcpy\current\scrcpy.exe"),
-            ]
-        else:
-            candidates = [
-                "/usr/bin/scrcpy",
-                "/usr/local/bin/scrcpy",
-                os.path.expanduser("~/bin/scrcpy"),
-                "/snap/bin/scrcpy",
-            ]
-
-        for path in candidates:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-        return None
+        # PhoneView intentionally uses only its pinned patched scrcpy build.
+        return ScrcpyInstaller.local_binary()
 
     def available(self):
         return bool(self.scrcpy)
@@ -174,6 +149,7 @@ class ScrcpyManager:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
         env = os.environ.copy()
+        env["PHONEVIEW_MAPPING"] = "1"
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
             raise RuntimeError(
                 "No graphical display session was found. Start PhoneView from the desktop session."
