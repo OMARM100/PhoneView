@@ -63,6 +63,9 @@ struct sc_phoneview_state {
     bool dragging;
     int capture_stage;
     int drag_index;
+    int selected_index;
+    uint64_t last_click_time;
+    int last_click_index;
     struct sc_phoneview_control controls[64];
     size_t count;
 };
