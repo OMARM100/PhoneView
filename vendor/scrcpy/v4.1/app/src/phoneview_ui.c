@@ -302,6 +302,35 @@ phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
 
 }
 
+static void
+phoneview_ui_focus_video(struct sc_phoneview_ui *ui) {
+    if (!ui || !ui->video_xid || !ui->window) {
+        return;
+    }
+
+    GdkDisplay *display = gtk_widget_get_display(ui->window);
+    if (!display || !GDK_IS_X11_DISPLAY(display)) {
+        return;
+    }
+
+    Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+    XRaiseWindow(xdisplay, ui->video_xid);
+    XSetInputFocus(xdisplay, ui->video_xid,
+                   RevertToParent, CurrentTime);
+    XFlush(xdisplay);
+}
+
+static gboolean
+phoneview_ui_focus_video_idle(gpointer userdata) {
+    struct sc_phoneview_ui *ui = userdata;
+    if (!ui || !ui->capture_mode) {
+        return G_SOURCE_REMOVE;
+    }
+
+    phoneview_ui_focus_video(ui);
+    return G_SOURCE_REMOVE;
+}
+
 static gboolean
 phoneview_ui_periodic_sync(gpointer userdata) {
     struct sc_phoneview_ui *ui = userdata;
@@ -960,8 +989,13 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
     ui->capture_mode = capture_mode;
     phoneview_ui_update_visibility(ui);
 
-    if (capture_mode && ui->video_area) {
-        gtk_widget_grab_focus(ui->video_area);
+    if (capture_mode) {
+        if (ui->video_area) {
+            gtk_widget_grab_focus(ui->video_area);
+        }
+
+        phoneview_ui_focus_video(ui);
+        g_idle_add(phoneview_ui_focus_video_idle, ui);
     }
 }
 
