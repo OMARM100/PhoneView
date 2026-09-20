@@ -1,3 +1,6 @@
+/* PhoneView modification: based on Genymobile/scrcpy v4.1.
+ * Adds the PhoneView in-window mapping editor and key/mouse/wheel mapping.
+ */
 #include "screen.h"
 
 #include <assert.h>
