@@ -1922,8 +1922,6 @@ void
 sc_screen_toggle_fullscreen(struct sc_screen *screen) {
     bool fullscreen = !(SDL_GetWindowFlags(screen->window) & SDL_WINDOW_FULLSCREEN);
     if (screen->phoneview.ui) {
-        GtkWidget *unused = NULL;
-        (void) unused;
         sc_phoneview_ui_set_fullscreen(screen->phoneview.ui, fullscreen);
         return;
     }
