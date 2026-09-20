@@ -105,6 +105,12 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
                              struct sc_phoneview_control_edit *control);
 
 bool
+sc_phoneview_ui_configure_new_control(
+    struct sc_phoneview_ui *ui,
+    int add_type,
+    struct sc_phoneview_control_edit *control);
+
+bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
 
 int
