@@ -198,6 +198,24 @@ phoneview_load_controls(struct sc_screen *screen) {
             snprintf(control.behavior, sizeof(control.behavior), "hold");
         }
 
+        /* Older PhoneView configs may contain a joystick without the
+         * direction fields. Keep those configs usable by restoring the
+         * standard WASD bindings. */
+        if (!strcmp(control.type, "joystick")) {
+            if (!control.up_key[0]) {
+                snprintf(control.up_key, sizeof(control.up_key), "W");
+            }
+            if (!control.left_key[0]) {
+                snprintf(control.left_key, sizeof(control.left_key), "A");
+            }
+            if (!control.down_key[0]) {
+                snprintf(control.down_key, sizeof(control.down_key), "S");
+            }
+            if (!control.right_key[0]) {
+                snprintf(control.right_key, sizeof(control.right_key), "D");
+            }
+        }
+
         if (!phoneview_json_float(object, end, "x", &control.x)) {
             control.x = 0.45f;
         }
@@ -529,34 +547,27 @@ phoneview_push_touch(struct sc_screen *screen,
                                    control->x, control->y);
 }
 
-static struct sc_phoneview_control *
-phoneview_find_joystick_for_key(struct sc_screen *screen, const char *key,
-                                int *direction_out, size_t *index_out) {
-    for (size_t i = 0; i < screen->phoneview.count; ++i) {
-        struct sc_phoneview_control *control =
-            &screen->phoneview.controls[i];
-
-        if (strcmp(control->type, "joystick")) {
-            continue;
-        }
-
-        if (!strcmp(control->up_key, key)) {
-            if (direction_out) *direction_out = 0;
-        } else if (!strcmp(control->left_key, key)) {
-            if (direction_out) *direction_out = 1;
-        } else if (!strcmp(control->down_key, key)) {
-            if (direction_out) *direction_out = 2;
-        } else if (!strcmp(control->right_key, key)) {
-            if (direction_out) *direction_out = 3;
-        } else {
-            continue;
-        }
-
-        if (index_out) *index_out = i;
-        return control;
+static int
+phoneview_joystick_key_direction(const struct sc_phoneview_control *control,
+                                  const char *key) {
+    if (!control || strcmp(control->type, "joystick")) {
+        return -1;
     }
 
-    return NULL;
+    if (!strcmp(control->up_key, key)) {
+        return 0;
+    }
+    if (!strcmp(control->left_key, key)) {
+        return 1;
+    }
+    if (!strcmp(control->down_key, key)) {
+        return 2;
+    }
+    if (!strcmp(control->right_key, key)) {
+        return 3;
+    }
+
+    return -1;
 }
 
 static struct sc_phoneview_control *
@@ -604,73 +615,103 @@ phoneview_handle_joystick_key(struct sc_screen *screen,
         return false;
     }
 
-    int direction = -1;
-    size_t index = 0;
-    struct sc_phoneview_control *control =
-        phoneview_find_joystick_for_key(screen, name, &direction, &index);
-    if (!control) {
-        return false;
+    bool handled = false;
+    const bool key_down = event->type == SDL_EVENT_KEY_DOWN;
+
+    for (size_t i = 0; i < screen->phoneview.count; ++i) {
+        struct sc_phoneview_control *control =
+            &screen->phoneview.controls[i];
+
+        int direction = phoneview_joystick_key_direction(control, name);
+        if (direction < 0) {
+            continue;
+        }
+
+        handled = true;
+
+        bool *state = NULL;
+        switch (direction) {
+            case 0: state = &control->active_up; break;
+            case 1: state = &control->active_left; break;
+            case 2: state = &control->active_down; break;
+            case 3: state = &control->active_right; break;
+            default: continue;
+        }
+
+        if (key_down) {
+            if (*state) {
+                continue;
+            }
+            *state = true;
+        } else {
+            if (!*state) {
+                continue;
+            }
+            *state = false;
+        }
+
+        float dx = (control->active_right ? 1.f : 0.f)
+                 - (control->active_left ? 1.f : 0.f);
+        float dy = (control->active_down ? 1.f : 0.f)
+                 - (control->active_up ? 1.f : 0.f);
+
+        if (dx == 0.f && dy == 0.f) {
+            if (control->active) {
+                (void) phoneview_push_touch_at(
+                    screen, control, i, AMOTION_EVENT_ACTION_UP,
+                    control->runtime_x, control->runtime_y);
+                control->active = false;
+            }
+
+            control->runtime_x = control->x;
+            control->runtime_y = control->y;
+            continue;
+        }
+
+        if (dx != 0.f && dy != 0.f) {
+            dx *= 0.7071f;
+            dy *= 0.7071f;
+        }
+
+        /*
+         * A virtual joystick must start with the finger on the joystick
+         * base, then move that same pointer. Sending ACTION_DOWN directly
+         * at the target direction makes many Android games interpret the
+         * first touch as an ordinary press rather than a joystick drag.
+         */
+        float sensitivity =
+            control->sensitivity > 0.01f ? control->sensitivity : 1.f;
+        float travel = SDL_clamp(0.12f * sensitivity, 0.06f, 0.24f);
+
+        float target_x = SDL_clamp(control->x + dx * travel, 0.01f, 0.99f);
+        float target_y = SDL_clamp(control->y + dy * travel, 0.01f, 0.99f);
+
+        if (!control->active) {
+            if (!phoneview_push_touch_at(
+                    screen, control, i, AMOTION_EVENT_ACTION_DOWN,
+                    control->x, control->y)) {
+                control->active_up = false;
+                control->active_left = false;
+                control->active_down = false;
+                control->active_right = false;
+                continue;
+            }
+            control->active = true;
+        }
+
+        (void) phoneview_push_touch_at(
+            screen, control, i, AMOTION_EVENT_ACTION_MOVE,
+            target_x, target_y);
+
+        control->runtime_x = target_x;
+        control->runtime_y = target_y;
     }
 
-    bool *state = NULL;
-    switch (direction) {
-        case 0: state = &control->active_up; break;
-        case 1: state = &control->active_left; break;
-        case 2: state = &control->active_down; break;
-        case 3: state = &control->active_right; break;
-        default: return true;
-    }
-
-    float dx = 0.f;
-    float dy = 0.f;
-
-    if (event->type == SDL_EVENT_KEY_DOWN) {
-        if (*state) {
-            return true;
-        }
-        *state = true;
-    } else {
-        if (!*state) {
-            return true;
-        }
-        *state = false;
-    }
-
-    dx = (control->active_right ? 1.f : 0.f)
-       - (control->active_left ? 1.f : 0.f);
-    dy = (control->active_down ? 1.f : 0.f)
-       - (control->active_up ? 1.f : 0.f);
-
-    if (dx == 0.f && dy == 0.f) {
-        if (control->active) {
-            (void) phoneview_push_touch_at(
-                screen, control, index, AMOTION_EVENT_ACTION_UP,
-                control->runtime_x, control->runtime_y);
-            control->active = false;
-        }
+    if (handled) {
         sc_screen_render(screen, false);
-        return true;
     }
 
-    if (dx != 0.f && dy != 0.f) {
-        dx *= 0.7071f;
-        dy *= 0.7071f;
-    }
-
-    control->runtime_x =
-        SDL_clamp(control->x + dx * 0.085f, 0.f, 1.f);
-    control->runtime_y =
-        SDL_clamp(control->y + dy * 0.085f, 0.f, 1.f);
-
-    (void) phoneview_push_touch_at(
-        screen, control, index,
-        control->active ? AMOTION_EVENT_ACTION_MOVE
-                        : AMOTION_EVENT_ACTION_DOWN,
-        control->runtime_x, control->runtime_y);
-    control->active = true;
-
-    sc_screen_render(screen, false);
-    return true;
+    return handled;
 }
 
 static bool
@@ -1289,7 +1330,7 @@ phoneview_render_controls(struct sc_screen *screen) {
             phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
-                PHONEVIEW_JOYSTICK_KNOB_RADIUS,
+                PHONEVIEW_JOYSTICK_KNOB_RADIUS * control_scale,
                 235, 245, 255,
                 editing ? 230 : 145);
             phoneview_draw_filled_circle(
@@ -1304,13 +1345,17 @@ phoneview_render_controls(struct sc_screen *screen) {
             float text_offset_x = 30.f * control_scale;
 
             phoneview_draw_text(screen->renderer, cx - 4.f,
-                                cy - text_offset_y, "W");
+                                cy - text_offset_y,
+                                control->up_key[0] ? control->up_key : "W");
             phoneview_draw_text(screen->renderer, cx - 4.f,
-                                cy + 28.f * control_scale, "S");
+                                cy + 28.f * control_scale,
+                                control->down_key[0] ? control->down_key : "S");
             phoneview_draw_text(screen->renderer, cx - text_offset_x,
-                                cy - 4.f, "A");
+                                cy - 4.f,
+                                control->left_key[0] ? control->left_key : "A");
             phoneview_draw_text(screen->renderer, cx + 24.f * control_scale,
-                                cy - 4.f, "D");
+                                cy - 4.f,
+                                control->right_key[0] ? control->right_key : "D");
 
             if (editing && selected) {
                 const float handle = 10.f;
