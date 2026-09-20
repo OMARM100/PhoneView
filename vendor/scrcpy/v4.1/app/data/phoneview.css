@@ -79,8 +79,8 @@
     background-image: none;
     border-top: 1px solid #3e3e42;
     border-bottom: 1px solid #1c1c1c;
-    padding: 6px 8px;
-    min-height: 44px;
+    padding: 4px 6px;
+    min-height: 50px;
 }
 
 #phoneview-toolbar toolitem {
@@ -96,10 +96,11 @@
     background-image: none;
     border: 1px solid #3e3e42;
     border-radius: 6px;
-    padding: 6px 12px;
-    margin: 0 4px;
+    padding: 4px 9px;
+    margin: 0 2px;
+    min-height: 34px;
     font-weight: 600;
-    font-size: 12px;
+    font-size: 11px;
     box-shadow: none;
     -gtk-icon-shadow: none;
 }
@@ -257,6 +258,7 @@
 
 #phoneview-toolbar #phoneview-status {
     color: #858585;
+    min-width: 140px;
     font-size: 11px;
     font-weight: 500;
     padding: 0 12px;
@@ -308,9 +310,16 @@
     background-color: #351f22;
 }
 
+#phoneview-toolbar #phoneview-edit-button { min-width: 82px; }
+#phoneview-toolbar #phoneview-add-button { min-width: 112px; }
+#phoneview-toolbar #phoneview-save-button { min-width: 78px; }
+#phoneview-toolbar #phoneview-duplicate-button { min-width: 102px; }
+#phoneview-toolbar #phoneview-delete-button { min-width: 80px; }
+#phoneview-toolbar #phoneview-done-button { min-width: 76px; }
+
 #phoneview-toolbar #phoneview-add-button {
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-left: 9px;
+    padding-right: 9px;
 }
 
 #phoneview-editor-heading {
