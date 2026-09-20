@@ -255,24 +255,6 @@ phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
     XMapRaised(xdisplay, ui->video_xid);
     XFlush(xdisplay);
 
-    if (ui->video_window) {
-        int sdl_width = 0;
-        int sdl_height = 0;
-        SDL_GetWindowSize(ui->video_window, &sdl_width, &sdl_height);
-
-        if (sdl_width != width || sdl_height != height) {
-            (void) SDL_SetWindowSize(ui->video_window, width, height);
-
-            XMoveResizeWindow(xdisplay,
-                              ui->video_xid,
-                              0,
-                              0,
-                              (unsigned) width,
-                              (unsigned) height);
-            XMapRaised(xdisplay, ui->video_xid);
-            XFlush(xdisplay);
-        }
-    }
 }
 
 static gboolean
