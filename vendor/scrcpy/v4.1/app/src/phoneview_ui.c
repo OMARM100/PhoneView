@@ -56,6 +56,7 @@ struct sc_phoneview_ui {
     Window video_xid;
     SDL_Window *video_window;
 
+    guint sync_timer_id;
     sc_phoneview_ui_action_cb action_cb;
     void *userdata;
     bool edit_mode;
@@ -274,6 +275,17 @@ phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
     }
 }
 
+static gboolean
+phoneview_ui_periodic_sync(gpointer userdata) {
+    struct sc_phoneview_ui *ui = userdata;
+    if (!ui || !ui->window || !ui->video_area) {
+        return G_SOURCE_REMOVE;
+    }
+
+    phoneview_ui_sync_video_size(ui);
+    return G_SOURCE_CONTINUE;
+}
+
 static void
 phoneview_ui_on_video_allocate(GtkWidget *widget,
                                GdkRectangle *allocation,
@@ -341,15 +353,11 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
         return;
     }
 
-    /*
-     * Keep the complete editing toolbar visible at all times.
-     * Outside edit mode, secondary actions are disabled instead of being
-     * removed from the layout when the user clicks Edit.
-     */
-    gtk_widget_set_visible(ui->edit_button, TRUE);
-    gtk_widget_set_visible(ui->add_button, TRUE);
-    gtk_widget_set_visible(ui->save_button, TRUE);
-    gtk_widget_set_visible(ui->done_button, TRUE);
+    /* Normal mode: show Edit only. Edit mode: show mapping actions. */
+    gtk_widget_set_visible(ui->edit_button, !ui->edit_mode);
+    gtk_widget_set_visible(ui->add_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->save_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->done_button, ui->edit_mode);
     gtk_widget_set_visible(ui->status_label, ui->edit_mode);
 
     gtk_widget_set_sensitive(ui->add_button, ui->edit_mode);
@@ -747,6 +755,10 @@ sc_phoneview_ui_create(const char *title,
 
     phoneview_ui_sync_video_size(ui);
     phoneview_ui_update_maximize_button(ui);
+
+    ui->sync_timer_id =
+        g_timeout_add(60, phoneview_ui_periodic_sync, ui);
+
     sc_phoneview_ui_set_edit_mode(ui, false);
     sc_phoneview_ui_set_capture_mode(ui, false);
 
@@ -757,6 +769,11 @@ void
 sc_phoneview_ui_destroy(struct sc_phoneview_ui *ui) {
     if (!ui) {
         return;
+    }
+
+    if (ui->sync_timer_id) {
+        g_source_remove(ui->sync_timer_id);
+        ui->sync_timer_id = 0;
     }
 
     if (ui->video_window) {
@@ -810,6 +827,29 @@ void
 sc_phoneview_ui_hide(struct sc_phoneview_ui *ui) {
     if (ui && ui->window) {
         gtk_widget_hide(ui->window);
+    }
+}
+
+void
+sc_phoneview_ui_get_video_size(struct sc_phoneview_ui *ui,
+                               int *width,
+                               int *height) {
+    if (width) {
+        *width = 0;
+    }
+    if (height) {
+        *height = 0;
+    }
+
+    if (!ui || !ui->video_area) {
+        return;
+    }
+
+    if (width) {
+        *width = gtk_widget_get_allocated_width(ui->video_area);
+    }
+    if (height) {
+        *height = gtk_widget_get_allocated_height(ui->video_area);
     }
 }
 
@@ -958,6 +998,19 @@ sc_phoneview_ui_show(struct sc_phoneview_ui *ui) {
 void
 sc_phoneview_ui_hide(struct sc_phoneview_ui *ui) {
     (void) ui;
+}
+
+void
+sc_phoneview_ui_get_video_size(struct sc_phoneview_ui *ui,
+                               int *width,
+                               int *height) {
+    (void) ui;
+    if (width) {
+        *width = 0;
+    }
+    if (height) {
+        *height = 0;
+    }
 }
 
 void
