@@ -193,6 +193,9 @@ phoneview_load_controls(struct sc_screen *screen) {
         phoneview_json_string(object, end, "right_key",
                               control.right_key,
                               sizeof(control.right_key));
+        phoneview_json_string(object, end, "look_activation",
+                              control.look_activation,
+                              sizeof(control.look_activation));
 
         if (!control.behavior[0]) {
             snprintf(control.behavior, sizeof(control.behavior), "hold");
@@ -229,11 +232,28 @@ phoneview_load_controls(struct sc_screen *screen) {
                                    &control.sensitivity)) {
             control.sensitivity = 1.6f;
         }
+        if (!phoneview_json_float(object, end, "speed", &control.speed)) {
+            control.speed = 1.f;
+        }
+
+        if (!strcmp(control.type, "look") && !control.look_activation[0]) {
+            snprintf(control.look_activation,
+                     sizeof(control.look_activation),
+                     "%s",
+                     control.mouse_button[0] ? "mouse" : "keyboard");
+        }
+        if (!strcmp(control.type, "look")
+                && !strcmp(control.look_activation, "keyboard")
+                && !control.key[0]) {
+            snprintf(control.key, sizeof(control.key), "Right Shift");
+        }
 
         control.x = SDL_clamp(control.x, 0.f, 1.f);
         control.y = SDL_clamp(control.y, 0.f, 1.f);
         control.size = SDL_clamp(control.size, 0.5f, 3.f);
-        control.sensitivity = SDL_clamp(control.sensitivity, 0.1f, 5.f);
+        control.sensitivity = SDL_clamp(control.sensitivity, 0.1f, 10.f);
+        control.speed = SDL_clamp(
+            control.speed > 0.f ? control.speed : 1.f, 0.1f, 5.f);
         control.runtime_x = control.x;
         control.runtime_y = control.y;
 
@@ -283,7 +303,7 @@ phoneview_save_controls(struct sc_screen *screen) {
                 "  {\"label\":\"%s\",\"key\":\"%s\","
                 "\"type\":\"%s\",\"x\":%.5f,\"y\":%.5f,"
                 "\"size\":%.5f,\"sensitivity\":%.5f,"
-                "\"behavior\":\"%s\"",
+                "\"speed\":%.5f,\"behavior\":\"%s\"",
                 control->label,
                 control->key,
                 control->type,
@@ -291,6 +311,7 @@ phoneview_save_controls(struct sc_screen *screen) {
                 control->y,
                 control->size > 0.f ? control->size : 1.f,
                 control->sensitivity > 0.f ? control->sensitivity : 1.6f,
+                control->speed > 0.f ? control->speed : 1.f,
                 control->behavior[0] ? control->behavior : "hold");
 
         if (control->mouse_button[0]) {
@@ -308,6 +329,10 @@ phoneview_save_controls(struct sc_screen *screen) {
         }
         if (control->right_key[0]) {
             fprintf(file, ",\"right_key\":\"%s\"", control->right_key);
+        }
+        if (control->look_activation[0]) {
+            fprintf(file, ",\"look_activation\":\"%s\"",
+                    control->look_activation);
         }
 
         fprintf(file, "}%s\n",
@@ -715,6 +740,16 @@ phoneview_handle_joystick_key(struct sc_screen *screen,
 }
 
 static bool
+phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
+                                       bool enabled);
+
+static bool
+phoneview_set_look_control_active(struct sc_screen *screen,
+                                   struct sc_phoneview_control *control,
+                                   size_t index,
+                                   bool active);
+
+static bool
 phoneview_handle_mapped_keyboard(struct sc_screen *screen,
                                   const SDL_KeyboardEvent *event) {
     bool handled = phoneview_handle_joystick_key(screen, event);
@@ -724,9 +759,31 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
         return handled;
     }
 
+    const bool key_down = event->type == SDL_EVENT_KEY_DOWN;
+
     for (size_t i = 0; i < screen->phoneview.count; ++i) {
         struct sc_phoneview_control *control =
             &screen->phoneview.controls[i];
+
+        if (!strcmp(control->type, "look")
+                && !strcmp(control->look_activation, "keyboard")
+                && !strcmp(control->key, name)) {
+            handled = true;
+
+            if (key_down) {
+                if (control->source_down) {
+                    continue;
+                }
+                control->source_down = true;
+                (void) phoneview_set_look_control_active(
+                    screen, control, i, true);
+            } else {
+                control->source_down = false;
+                (void) phoneview_set_look_control_active(
+                    screen, control, i, false);
+            }
+            continue;
+        }
 
         if (strcmp(control->type, "keyboard")
                 || strcmp(control->key, name)) {
@@ -735,7 +792,7 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
 
         handled = true;
 
-        if (event->type == SDL_EVENT_KEY_DOWN) {
+        if (key_down) {
             if (control->source_down) {
                 continue;
             }
@@ -783,73 +840,61 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
     return handled;
 }
 
-
 static bool
-phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
-                                       bool enabled) {
-    if (!screen || !screen->window) {
+phoneview_set_look_control_active(struct sc_screen *screen,
+                                   struct sc_phoneview_control *control,
+                                   size_t index,
+                                   bool active) {
+    if (!screen || !control) {
         return false;
     }
 
-    if (enabled) {
-        if (screen->phoneview.mouse_look_relative_mode) {
+    if (active) {
+        if (control->active) {
             return true;
         }
 
-        sc_phoneview_ui_focus_video(screen->phoneview.ui);
-
-        /*
-         * Mouse-look owns the mouse for as long as the mapped button is held:
-         * the cursor is invisible, movement is relative, and the cursor cannot
-         * escape the PhoneView video surface.
-         */
-        screen->phoneview.mouse_look_previous_relative_mode =
-            SDL_GetWindowRelativeMouseMode(screen->window);
-        screen->phoneview.mouse_look_previous_cursor_visible =
-            SDL_CursorVisible();
-
-        SDL_RaiseWindow(screen->window);
-        SDL_SetWindowMouseGrab(screen->window, true);
-        SDL_CaptureMouse(true);
-        SDL_HideCursor();
-
-        if (!SDL_SetWindowRelativeMouseMode(screen->window, true)) {
-            SDL_ShowCursor();
-            SDL_CaptureMouse(false);
-            SDL_SetWindowMouseGrab(screen->window, false);
-            LOGW("PhoneView Mouse Look: could not enable relative mouse mode: %s",
-                 SDL_GetError());
+        if (!phoneview_set_mouse_look_relative_mode(screen, true)) {
             return false;
         }
 
-        screen->phoneview.mouse_look_relative_mode = true;
+        control->runtime_x = control->x;
+        control->runtime_y = control->y;
+
+        if (!phoneview_push_touch_at(
+                screen, control, index, AMOTION_EVENT_ACTION_DOWN,
+                control->x, control->y)) {
+            phoneview_set_mouse_look_relative_mode(screen, false);
+            return false;
+        }
+
+        control->active = true;
         return true;
     }
 
-    if (!screen->phoneview.mouse_look_relative_mode) {
+    if (!control->active) {
         return true;
     }
 
-    bool previous_relative =
-        screen->phoneview.mouse_look_previous_relative_mode;
-    bool previous_visible =
-        screen->phoneview.mouse_look_previous_cursor_visible;
+    (void) phoneview_push_touch_at(
+        screen, control, index, AMOTION_EVENT_ACTION_UP,
+        control->runtime_x, control->runtime_y);
+    control->active = false;
 
-    bool relative_ok = SDL_SetWindowRelativeMouseMode(
-        screen->window, previous_relative);
-
-    SDL_SetWindowMouseGrab(screen->window, false);
-    SDL_CaptureMouse(false);
-
-    if (previous_visible) {
-        SDL_ShowCursor();
-    } else {
-        SDL_HideCursor();
+    bool another_active = false;
+    for (size_t i = 0; i < screen->phoneview.count; ++i) {
+        if (!strcmp(screen->phoneview.controls[i].type, "look")
+                && screen->phoneview.controls[i].active) {
+            another_active = true;
+            break;
+        }
     }
 
-    screen->phoneview.mouse_look_relative_mode = false;
+    if (!another_active) {
+        phoneview_set_mouse_look_relative_mode(screen, false);
+    }
 
-    return relative_ok;
+    return true;
 }
 
 static bool
@@ -868,49 +913,23 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
     size_t index = 0;
     struct sc_phoneview_control *look =
         phoneview_find_mouse_look_control(screen, name, &index);
+    if (look && strcmp(look->look_activation, "mouse")) {
+        look = NULL;
+    }
 
     if (look) {
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (!look->source_down) {
                 look->source_down = true;
-                look->runtime_x = look->x;
-                look->runtime_y = look->y;
-
-                /*
-                 * Keep the cursor captured in relative mode while looking.
-                 * This prevents the camera from stopping at the edge of the
-                 * PhoneView window and gives SDL reliable xrel/yrel events.
-                 */
-                if (!phoneview_set_mouse_look_relative_mode(screen, true)) {
+                if (!phoneview_set_look_control_active(
+                        screen, look, index, true)) {
                     look->source_down = false;
-                    return true;
-                }
-
-                /*
-                 * The first Android touch is always created exactly at the
-                 * LOOK control's configured position. Mouse movement starts
-                 * controlling that same pointer immediately after this DOWN.
-                 */
-                if (phoneview_push_touch_at(
-                        screen, look, index, AMOTION_EVENT_ACTION_DOWN,
-                        look->x, look->y)) {
-                    look->runtime_x = look->x;
-                    look->runtime_y = look->y;
-                    look->active = true;
-                } else {
-                    look->source_down = false;
-                    phoneview_set_mouse_look_relative_mode(screen, false);
                 }
             }
         } else {
             look->source_down = false;
-            if (look->active) {
-                (void) phoneview_push_touch_at(
-                    screen, look, index, AMOTION_EVENT_ACTION_UP,
-                    look->runtime_x, look->runtime_y);
-                look->active = false;
-            }
-            phoneview_set_mouse_look_relative_mode(screen, false);
+            (void) phoneview_set_look_control_active(
+                screen, look, index, false);
         }
 
         return true;
@@ -969,9 +988,14 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
 }
 
 static bool
-phoneview_handle_mouse_look_motion(struct sc_screen *screen,
-                                   const SDL_MouseMotionEvent *event) {
+phoneview_handle_mouse_look_delta(struct sc_screen *screen,
+                                  float xrel,
+                                  float yrel) {
     bool handled = false;
+
+    if (xrel == 0.f && yrel == 0.f) {
+        return false;
+    }
 
     for (size_t i = 0; i < screen->phoneview.count; ++i) {
         struct sc_phoneview_control *control =
@@ -983,32 +1007,18 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
 
         float sensitivity =
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
-        const float look_gain = 2.5f * sensitivity;
-
-        float xrel = event->xrel;
-        float yrel = event->yrel;
-
-        if (xrel == 0.f && yrel == 0.f) {
-            float cached_x = 0.f;
-            float cached_y = 0.f;
-            (void) SDL_GetRelativeMouseState(&cached_x, &cached_y);
-            xrel = cached_x;
-            yrel = cached_y;
-        }
-
-        if (xrel == 0.f && yrel == 0.f) {
-            continue;
-        }
+        float speed = control->speed > 0.01f ? control->speed : 1.f;
+        float look_gain = 2.5f * sensitivity * speed;
 
         control->runtime_x +=
             xrel / MAX(1.f, screen->rect.w) * look_gain;
         control->runtime_y +=
             yrel / MAX(1.f, screen->rect.h) * look_gain;
 
-        control->runtime_x =
-            SDL_clamp(control->runtime_x, 0.01f, 0.99f);
-        control->runtime_y =
-            SDL_clamp(control->runtime_y, 0.01f, 0.99f);
+        control->runtime_x = SDL_clamp(
+            control->runtime_x, 0.01f, 0.99f);
+        control->runtime_y = SDL_clamp(
+            control->runtime_y, 0.01f, 0.99f);
 
         (void) phoneview_push_touch_at(
             screen, control, i, AMOTION_EVENT_ACTION_MOVE,
@@ -1702,10 +1712,16 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
                      edit.down_key);
             snprintf(control->right_key, sizeof(control->right_key), "%s",
                      edit.right_key);
+            snprintf(control->look_activation,
+                     sizeof(control->look_activation), "%s",
+                     edit.look_activation);
             control->size = SDL_clamp(
                 edit.size > 0.f ? edit.size : 1.f, 0.5f, 3.f);
             control->sensitivity = SDL_clamp(
                 edit.sensitivity > 0.f ? edit.sensitivity : 1.6f,
+                0.1f, 10.f);
+            control->speed = SDL_clamp(
+                edit.speed > 0.f ? edit.speed : 1.f,
                 0.1f, 5.f);
 
             size_t new_index = screen->phoneview.count++;
@@ -1862,8 +1878,7 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 }
                 break;
             case SDL_EVENT_MOUSE_MOTION:
-                if (phoneview_handle_mouse_look_motion(
-                        screen, &event->motion)) {
+                if (screen->phoneview.mouse_look_relative_mode) {
                     return true;
                 }
                 break;
@@ -3590,6 +3605,14 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             return;
         }
         case SC_EVENT_NEW_FRAME: {
+            if (screen->phoneview.mouse_look_relative_mode) {
+                float xrel = 0.f;
+                float yrel = 0.f;
+                (void) SDL_GetRelativeMouseState(&xrel, &yrel);
+                (void) phoneview_handle_mouse_look_delta(
+                    screen, xrel, yrel);
+            }
+
             bool ok = sc_screen_update_frame(screen);
             if (!ok) {
                 LOGE("Frame update failed\n");
