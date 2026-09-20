@@ -574,6 +574,8 @@ phoneview_capture_wheel(struct sc_screen *screen, float x, float y) {
 
     screen->phoneview.capture_mode = false;
     phoneview_save_controls(screen);
+    sc_phoneview_ui_set_capture_mode(screen->phoneview.ui, false);
+    sc_screen_render(screen, false);
 }
 
 static void
