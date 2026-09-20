@@ -22,6 +22,7 @@
 #include "input_manager.h"
 #include "mouse_capture.h"
 #include "options.h"
+#include "phoneview_ui.h"
 #include "texture.h"
 #include "trait/key_processor.h"
 #include "trait/frame_sink.h"
@@ -43,6 +44,7 @@ struct sc_phoneview_control {
 };
 
 struct sc_phoneview_state {
+    struct sc_phoneview_ui *ui;
     bool enabled;
     bool edit_mode;
     bool capture_mode;
@@ -220,6 +222,10 @@ sc_screen_set_paused(struct sc_screen *screen, bool paused);
 // react to SDL events
 void
 sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event);
+
+// Pump the native PhoneView UI event queue (GTK on Linux).
+void
+sc_screen_pump_ui_events(struct sc_screen *screen);
 
 // run the event loop once the device is disconnected
 void
