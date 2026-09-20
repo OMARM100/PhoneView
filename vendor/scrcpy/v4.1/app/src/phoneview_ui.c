@@ -53,6 +53,7 @@ struct sc_phoneview_ui {
 
     GtkWidget *video_area;
     GdkWindow *video_gdk_window;
+    Window video_xid;
     SDL_Window *video_window;
 
     sc_phoneview_ui_action_cb action_cb;
@@ -225,63 +226,33 @@ phoneview_ui_asset_path(const char *subpath,
 }
 
 static void
-phoneview_ui_set_skip_taskbar(Window xid) {
-    GdkDisplay *gdk_display = gdk_display_get_default();
-    if (!gdk_display || !GDK_IS_X11_DISPLAY(gdk_display)) {
-        return;
-    }
-
-    Display *display = gdk_x11_display_get_xdisplay(gdk_display);
-    Atom wm_state = XInternAtom(display, "_NET_WM_STATE", False);
-    Atom skip_taskbar = XInternAtom(display,
-                                    "_NET_WM_STATE_SKIP_TASKBAR",
-                                    False);
-    Atom skip_pager = XInternAtom(display,
-                                  "_NET_WM_STATE_SKIP_PAGER",
-                                  False);
-    Atom states[2] = { skip_taskbar, skip_pager };
-
-    XChangeProperty(display,
-                    xid,
-                    wm_state,
-                    XA_ATOM,
-                    32,
-                    PropModeAppend,
-                    (unsigned char *) states,
-                    2);
-    XFlush(display);
-}
-
-static void
 phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
-    if (!ui || !ui->video_gdk_window) {
+    if (!ui || !ui->video_gdk_window || !ui->video_xid) {
         return;
     }
 
     int width = gtk_widget_get_allocated_width(ui->video_area);
     int height = gtk_widget_get_allocated_height(ui->video_area);
-
     if (width <= 0 || height <= 0) {
         return;
     }
 
-    GdkWindow *window = ui->video_gdk_window;
-
-    gdk_window_move_resize(window, 0, 0, width, height);
-
-    GdkDisplay *display = gdk_window_get_display(window);
-    if (GDK_IS_X11_DISPLAY(display)) {
-        Display *xdisplay = gdk_x11_display_get_xdisplay(display);
-        Window xid = gdk_x11_window_get_xid(window);
-
-        XMoveResizeWindow(xdisplay,
-                          xid,
-                          0,
-                          0,
-                          (unsigned) width,
-                          (unsigned) height);
-        XFlush(xdisplay);
+    GdkDisplay *display = gtk_widget_get_display(ui->video_area);
+    if (!display || !GDK_IS_X11_DISPLAY(display)) {
+        return;
     }
+
+    Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+
+    XMoveResizeWindow(xdisplay,
+                      ui->video_xid,
+                      0,
+                      0,
+                      (unsigned) width,
+                      (unsigned) height);
+
+    XMapRaised(xdisplay, ui->video_xid);
+    XFlush(xdisplay);
 
     if (ui->video_window) {
         int sdl_width = 0;
@@ -290,6 +261,15 @@ phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
 
         if (sdl_width != width || sdl_height != height) {
             (void) SDL_SetWindowSize(ui->video_window, width, height);
+
+            XMoveResizeWindow(xdisplay,
+                              ui->video_xid,
+                              0,
+                              0,
+                              (unsigned) width,
+                              (unsigned) height);
+            XMapRaised(xdisplay, ui->video_xid);
+            XFlush(xdisplay);
         }
     }
 }
@@ -688,22 +668,49 @@ sc_phoneview_ui_create(const char *title,
         return NULL;
     }
 
-    Window xid = gdk_x11_window_get_xid(ui->video_gdk_window);
-    gdk_window_set_skip_taskbar_hint(ui->video_gdk_window, TRUE);
-    gdk_window_set_skip_pager_hint(ui->video_gdk_window, TRUE);
-    phoneview_ui_set_skip_taskbar(xid);
+    /*
+     * GTK owns the placeholder area. SDL renders into a dedicated X11 child
+     * created by PhoneView, avoiding geometry conflicts with GTK's child.
+     */
+    Window parent_xid = gdk_x11_window_get_xid(ui->video_gdk_window);
+    Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+
+    ui->video_xid = XCreateSimpleWindow(
+        xdisplay,
+        parent_xid,
+        0,
+        0,
+        (unsigned) MAX(1, video_width),
+        (unsigned) MAX(1, video_height),
+        0,
+        0,
+        0
+    );
+    if (!ui->video_xid) {
+        LOGE("PhoneView UI: failed to create native video child window");
+        sc_phoneview_ui_destroy(ui);
+        return NULL;
+    }
+
+    XSelectInput(xdisplay,
+                 ui->video_xid,
+                 ExposureMask | StructureNotifyMask);
+    XMapRaised(xdisplay, ui->video_xid);
+    XFlush(xdisplay);
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if (!props) {
         LOGE("PhoneView UI: SDL_CreateProperties() failed: %s",
              SDL_GetError());
+        XDestroyWindow(xdisplay, ui->video_xid);
+        ui->video_xid = 0;
         sc_phoneview_ui_destroy(ui);
         return NULL;
     }
 
     SDL_SetNumberProperty(props,
                           SDL_PROP_WINDOW_CREATE_X11_WINDOW_NUMBER,
-                          (Sint64) xid);
+                          (Sint64) ui->video_xid);
 
     ui->video_window = SDL_CreateWindowWithProperties(props);
     SDL_DestroyProperties(props);
@@ -711,6 +718,8 @@ sc_phoneview_ui_create(const char *title,
     if (!ui->video_window) {
         LOGE("PhoneView UI: SDL_CreateWindowWithProperties() failed: %s",
              SDL_GetError());
+        XDestroyWindow(xdisplay, ui->video_xid);
+        ui->video_xid = 0;
         sc_phoneview_ui_destroy(ui);
         return NULL;
     }
@@ -736,6 +745,18 @@ sc_phoneview_ui_destroy(struct sc_phoneview_ui *ui) {
     if (ui->video_window) {
         SDL_DestroyWindow(ui->video_window);
         ui->video_window = NULL;
+    }
+
+    if (ui->video_xid) {
+        GdkDisplay *display = ui->window
+            ? gtk_widget_get_display(ui->window)
+            : NULL;
+        if (display && GDK_IS_X11_DISPLAY(display)) {
+            Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+            XDestroyWindow(xdisplay, ui->video_xid);
+            XFlush(xdisplay);
+        }
+        ui->video_xid = 0;
     }
 
     if (ui->window) {
