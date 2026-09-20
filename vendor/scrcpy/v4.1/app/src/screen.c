@@ -343,6 +343,45 @@ phoneview_control_height(const struct sc_phoneview_control *control) {
     return PHONEVIEW_CONTROL_H * phoneview_control_size(control);
 }
 
+static void
+phoneview_clamp_control_position(struct sc_phoneview_control *control,
+                                 float width,
+                                 float height) {
+    if (!control || width <= 0.f || height <= 0.f) {
+        return;
+    }
+
+    float scale = phoneview_control_size(control);
+    float half_w;
+    float half_h;
+
+    if (!strcmp(control->type, "joystick")) {
+        float diameter = PHONEVIEW_JOYSTICK_RADIUS * 2.f * scale;
+        half_w = diameter / 2.f;
+        half_h = diameter / 2.f;
+    } else {
+        half_w = phoneview_control_width(control) / 2.f;
+        half_h = phoneview_control_height(control) / 2.f;
+    }
+
+    float min_x = half_w / width;
+    float max_x = 1.f - min_x;
+    float min_y = half_h / height;
+    float max_y = 1.f - min_y;
+
+    /* Tiny windows can be smaller than a large control. In that case
+     * keep the center visible instead of producing inverted bounds. */
+    if (min_x > max_x) {
+        min_x = max_x = 0.5f;
+    }
+    if (min_y > max_y) {
+        min_y = max_y = 0.5f;
+    }
+
+    control->x = SDL_clamp(control->x, min_x, max_x);
+    control->y = SDL_clamp(control->y, min_y, max_y);
+}
+
 static int
 phoneview_hit_control(struct sc_screen *screen, float x, float y,
                        float width, float height) {
@@ -1526,6 +1565,64 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
         if (!screen->phoneview.capture_mode) {
+            int index = screen->phoneview.selected_index;
+
+            if (event->key.key == SDLK_ESCAPE) {
+                screen->phoneview.selected_index = -1;
+                screen->phoneview.last_click_index = -1;
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui, "Selection cleared");
+                sc_screen_render(screen, false);
+                return true;
+            }
+
+            if ((event->key.key == SDLK_DELETE
+                    || event->key.key == SDLK_BACKSPACE)
+                    && index >= 0
+                    && (size_t) index < screen->phoneview.count) {
+                for (size_t i = (size_t) index;
+                     i + 1 < screen->phoneview.count; ++i) {
+                    screen->phoneview.controls[i] =
+                        screen->phoneview.controls[i + 1];
+                }
+                screen->phoneview.count--;
+                screen->phoneview.selected_index = -1;
+                phoneview_save_controls(screen);
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui, "Control deleted");
+                sc_screen_render(screen, false);
+                return true;
+            }
+
+            if (index >= 0 && (size_t) index < screen->phoneview.count) {
+                struct sc_phoneview_control *control =
+                    &screen->phoneview.controls[index];
+                float step = (event->key.mod & SDL_KMOD_SHIFT) ? 0.02f : 0.006f;
+
+                switch (event->key.key) {
+                    case SDLK_LEFT:
+                        control->x -= step;
+                        break;
+                    case SDLK_RIGHT:
+                        control->x += step;
+                        break;
+                    case SDLK_UP:
+                        control->y -= step;
+                        break;
+                    case SDLK_DOWN:
+                        control->y += step;
+                        break;
+                    default:
+                        return true;
+                }
+
+                phoneview_clamp_control_position(
+                    control, screen->rect.w, screen->rect.h);
+                phoneview_save_controls(screen);
+                sc_screen_render(screen, false);
+                return true;
+            }
+
             return true;
         }
 
@@ -1801,6 +1898,8 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 x / MAX(1.f, screen->rect.w), 0.f, 1.f);
             control->y = SDL_clamp(
                 y / MAX(1.f, screen->rect.h), 0.f, 1.f);
+            phoneview_clamp_control_position(
+                control, screen->rect.w, screen->rect.h);
         }
 
         sc_screen_render(screen, false);
