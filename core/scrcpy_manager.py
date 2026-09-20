@@ -92,14 +92,13 @@ class ScrcpyManager:
             " ".join(str(project_name).split()).strip()[:80] or "Android Project",
         ]
 
-        for option in ("--stay-awake", "--always-on-top"):
-            if self._supports(option):
-                cmd.append(option)
+        if self._supports("--stay-awake"):
+            cmd.append("--stay-awake")
 
-        if self._supports("--window-width"):
-            cmd += ["--window-width", "520"]
-        if self._supports("--window-height"):
-            cmd += ["--window-height", "820"]
+        # PhoneView owns the native window size. Do not force a fixed
+        # portrait 520x820 window onto devices whose video is landscape.
+        if self._supports("--always-on-top"):
+            cmd.append("--always-on-top")
 
         return cmd
 
@@ -256,9 +255,8 @@ class ScrcpyManager:
             return False
 
     def focus_window(self, title):
-        """Best-effort focus for the separate native scrcpy window."""
-        if not title:
-            return False
+        """Best-effort focus for the unified PhoneView native window."""
+        title = "PhoneView"
         if os.name == "nt":
             try:
                 import ctypes
