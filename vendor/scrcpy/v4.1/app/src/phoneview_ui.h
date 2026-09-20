@@ -28,6 +28,18 @@ typedef void (*sc_phoneview_ui_action_cb)(
     void *userdata
 );
 
+struct sc_phoneview_control_edit {
+    char label[32];
+    char key[32];
+    char type[16];
+    char mouse_button[16];
+    char behavior[16];
+    char up_key[32];
+    char left_key[32];
+    char down_key[32];
+    char right_key[32];
+};
+
 struct sc_phoneview_ui;
 
 struct sc_phoneview_ui *
@@ -79,6 +91,9 @@ sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui);
 void
 sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
                                     const char *status);
+
+bool
+sc_phoneview_ui_edit_control(struct sc_phoneview_control_edit *control);
 
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
