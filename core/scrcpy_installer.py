@@ -25,6 +25,11 @@ SERVER_SHA256 = "deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850ca
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 VENDORED_ROOT = PROJECT_ROOT / "vendor" / "scrcpy" / PHONEVIEW_SCRCPY_VERSION
 SDL_INSTALL_RELATIVE = Path("app") / "deps" / "work" / "install" / "linux-native-shared"
+SDL_CACHE_VERSION = "3.4.12"
+SDL_CACHE_ROOT = (
+    Path.home() / ".cache" / "phoneview" / "sdl3"
+    / SDL_CACHE_VERSION / "linux-native-shared"
+)
 
 
 class ScrcpyInstaller:
@@ -173,8 +178,23 @@ class ScrcpyInstaller:
         if not sdl_script.is_file():
             raise RuntimeError(f"Vendored SDL3 build script is missing: {sdl_script}")
 
+        pkgconfig = SDL_CACHE_ROOT / "lib" / "pkgconfig"
+        cached_env = env.copy()
+        old_pkg = cached_env.get("PKG_CONFIG_PATH", "")
+        cached_env["PKG_CONFIG_PATH"] = (
+            f"{pkgconfig}:{old_pkg}" if old_pkg else str(pkgconfig)
+        )
+
+        if (
+            (pkgconfig / "sdl3.pc").is_file()
+            and (SDL_CACHE_ROOT / "lib" / "libSDL3.so").exists()
+            and ScrcpyInstaller._pkg_config_has_sdl3(cached_env)
+        ):
+            emit(f"✓ Cached SDL3 3.4.12 is ready: {SDL_CACHE_ROOT}")
+            return cached_env, SDL_CACHE_ROOT
+
         emit("↓ System SDL3 development files are unavailable.")
-        emit("↓ Building pinned SDL3 3.4.12 locally.")
+        emit("↓ Building pinned SDL3 3.4.12 locally (cached for future builds).")
 
         for command in ("bash", "cmake", "wget", "tar", "shasum"):
             ScrcpyInstaller._require_command(command)
@@ -187,16 +207,30 @@ class ScrcpyInstaller:
         )
 
         local_install = source_root / SDL_INSTALL_RELATIVE
-        pkgconfig = local_install / "lib" / "pkgconfig"
+        local_pkgconfig = local_install / "lib" / "pkgconfig"
         local_env = env.copy()
         old_pkg = local_env.get("PKG_CONFIG_PATH", "")
-        local_env["PKG_CONFIG_PATH"] = f"{pkgconfig}:{old_pkg}" if old_pkg else str(pkgconfig)
+        local_env["PKG_CONFIG_PATH"] = (
+            f"{local_pkgconfig}:{old_pkg}"
+            if old_pkg else str(local_pkgconfig)
+        )
 
         if not ScrcpyInstaller._pkg_config_has_sdl3(local_env):
             raise RuntimeError("Local SDL3 was built, but pkg-config cannot find it.")
 
-        emit(f"✓ Local SDL3 ready: {local_install}")
-        return local_env, local_install
+        if SDL_CACHE_ROOT.exists():
+            shutil.rmtree(SDL_CACHE_ROOT)
+        SDL_CACHE_ROOT.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(local_install, SDL_CACHE_ROOT)
+
+        cached_env = env.copy()
+        old_pkg = cached_env.get("PKG_CONFIG_PATH", "")
+        cached_env["PKG_CONFIG_PATH"] = (
+            f"{pkgconfig}:{old_pkg}" if old_pkg else str(pkgconfig)
+        )
+
+        emit(f"✓ Cached SDL3 ready: {SDL_CACHE_ROOT}")
+        return cached_env, SDL_CACHE_ROOT
 
     @staticmethod
     def install(progress=None, log=None):
