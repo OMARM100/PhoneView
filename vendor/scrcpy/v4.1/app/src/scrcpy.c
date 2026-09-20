@@ -116,7 +116,18 @@ sdl_configure_ctrl_c_windows(void) {
 static enum scrcpy_exit_code
 event_loop(struct scrcpy *s, bool has_screen) {
     SDL_Event event;
-    while (SDL_WaitEvent(&event)) {
+    for (;;) {
+        if (!SDL_WaitEventTimeout(&event, has_screen ? 10 : -1)) {
+            if (has_screen) {
+                sc_screen_pump_ui_events(&s->screen);
+            }
+            continue;
+        }
+
+        if (has_screen) {
+            sc_screen_pump_ui_events(&s->screen);
+        }
+
         switch (event.type) {
             case SC_EVENT_DEVICE_DISCONNECTED:
                 LOGW("Device disconnected");
