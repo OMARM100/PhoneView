@@ -784,30 +784,67 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
 }
 
 
-static void
+static bool
 phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
                                        bool enabled) {
     if (!screen || !screen->window) {
-        return;
+        return false;
     }
 
     if (enabled) {
         if (screen->phoneview.mouse_look_relative_mode) {
-            return;
+            return true;
         }
 
+        /*
+         * Mouse-look owns the mouse for as long as the mapped button is held:
+         * the cursor is invisible, movement is relative, and the cursor cannot
+         * escape the PhoneView video surface.
+         */
         screen->phoneview.mouse_look_previous_relative_mode =
             SDL_GetWindowRelativeMouseMode(screen->window);
+        screen->phoneview.mouse_look_previous_cursor_visible =
+            SDL_CursorVisible();
 
-        if (SDL_SetWindowRelativeMouseMode(screen->window, true)) {
-            screen->phoneview.mouse_look_relative_mode = true;
+        SDL_RaiseWindow(screen->window);
+        SDL_SetWindowMouseGrab(screen->window, true);
+        SDL_HideCursor();
+
+        if (!SDL_SetWindowRelativeMouseMode(screen->window, true)) {
+            SDL_ShowCursor();
+            SDL_SetWindowMouseGrab(screen->window, false);
+            LOGW("PhoneView Mouse Look: could not enable relative mouse mode: %s",
+                 SDL_GetError());
+            return false;
         }
-    } else if (screen->phoneview.mouse_look_relative_mode) {
-        (void) SDL_SetWindowRelativeMouseMode(
-            screen->window,
-            screen->phoneview.mouse_look_previous_relative_mode);
-        screen->phoneview.mouse_look_relative_mode = false;
+
+        screen->phoneview.mouse_look_relative_mode = true;
+        return true;
     }
+
+    if (!screen->phoneview.mouse_look_relative_mode) {
+        return true;
+    }
+
+    bool previous_relative =
+        screen->phoneview.mouse_look_previous_relative_mode;
+    bool previous_visible =
+        screen->phoneview.mouse_look_previous_cursor_visible;
+
+    bool relative_ok = SDL_SetWindowRelativeMouseMode(
+        screen->window, previous_relative);
+
+    SDL_SetWindowMouseGrab(screen->window, false);
+
+    if (previous_visible) {
+        SDL_ShowCursor();
+    } else {
+        SDL_HideCursor();
+    }
+
+    screen->phoneview.mouse_look_relative_mode = false;
+
+    return relative_ok;
 }
 
 static bool
@@ -839,11 +876,21 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
                  * This prevents the camera from stopping at the edge of the
                  * PhoneView window and gives SDL reliable xrel/yrel events.
                  */
-                phoneview_set_mouse_look_relative_mode(screen, true);
+                if (!phoneview_set_mouse_look_relative_mode(screen, true)) {
+                    look->source_down = false;
+                    return true;
+                }
 
+                /*
+                 * The first Android touch is always created exactly at the
+                 * LOOK control's configured position. Mouse movement starts
+                 * controlling that same pointer immediately after this DOWN.
+                 */
                 if (phoneview_push_touch_at(
                         screen, look, index, AMOTION_EVENT_ACTION_DOWN,
-                        look->runtime_x, look->runtime_y)) {
+                        look->x, look->y)) {
+                    look->runtime_x = look->x;
+                    look->runtime_y = look->y;
                     look->active = true;
                 } else {
                     look->source_down = false;
@@ -932,6 +979,10 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
         float sensitivity =
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
         const float look_gain = 2.5f * sensitivity;
+
+        if (event->xrel == 0.f && event->yrel == 0.f) {
+            continue;
+        }
 
         control->runtime_x +=
             event->xrel / MAX(1.f, screen->rect.w) * look_gain;
@@ -2796,6 +2847,7 @@ phoneview_toggle_fullscreen(struct sc_screen *screen, bool fullscreen) {
 
 static void
 phoneview_destroy_window(struct sc_screen *screen) {
+    phoneview_set_mouse_look_relative_mode(screen, false);
     if (screen->phoneview.ui) {
         sc_phoneview_ui_destroy(screen->phoneview.ui);
         screen->phoneview.ui = NULL;
@@ -2826,6 +2878,7 @@ sc_screen_init(struct sc_screen *screen,
     screen->phoneview.resize_index = -1;
     screen->phoneview.mouse_look_relative_mode = false;
     screen->phoneview.mouse_look_previous_relative_mode = false;
+    screen->phoneview.mouse_look_previous_cursor_visible = true;
     if (screen->phoneview.enabled) {
         phoneview_load_controls(screen);
     }
