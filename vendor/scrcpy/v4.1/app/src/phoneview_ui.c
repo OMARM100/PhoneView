@@ -341,11 +341,28 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
         return;
     }
 
-    gtk_widget_set_visible(ui->edit_button, !ui->edit_mode);
-    gtk_widget_set_visible(ui->add_button, ui->edit_mode);
-    gtk_widget_set_visible(ui->save_button, ui->edit_mode);
-    gtk_widget_set_visible(ui->done_button, ui->edit_mode);
+    /*
+     * Keep the complete editing toolbar visible at all times.
+     * Outside edit mode, secondary actions are disabled instead of being
+     * removed from the layout when the user clicks Edit.
+     */
+    gtk_widget_set_visible(ui->edit_button, TRUE);
+    gtk_widget_set_visible(ui->add_button, TRUE);
+    gtk_widget_set_visible(ui->save_button, TRUE);
+    gtk_widget_set_visible(ui->done_button, TRUE);
     gtk_widget_set_visible(ui->status_label, ui->edit_mode);
+
+    gtk_widget_set_sensitive(ui->add_button, ui->edit_mode);
+    gtk_widget_set_sensitive(ui->save_button, ui->edit_mode);
+    gtk_widget_set_sensitive(ui->done_button, ui->edit_mode);
+
+    GtkStyleContext *edit_style =
+        gtk_widget_get_style_context(ui->edit_button);
+    if (ui->edit_mode) {
+        gtk_style_context_add_class(edit_style, "active");
+    } else {
+        gtk_style_context_remove_class(edit_style, "active");
+    }
 
     if (!ui->edit_mode) {
         gtk_label_set_text(GTK_LABEL(ui->status_label), "");
