@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.request
+import hashlib
 from pathlib import Path
 
 
