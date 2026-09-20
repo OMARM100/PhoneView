@@ -365,11 +365,20 @@ class SetupWindow(QDialog):
             return
 
         packages = self.checker.missing_linux_packages()
+        self.pending_scrcpy_build = not self.checker.scrcpy_ok()
+
+        # The checker intentionally does not expose the pseudo-package
+        # "phoneview-scrcpy" in the APT package list. Build state must therefore
+        # be derived from the actual PhoneView engine check, otherwise setup can
+        # finish installing system packages and immediately loop forever.
         if not packages:
-            self.run_check()
+            if self.pending_scrcpy_build:
+                self.start_scrcpy_build()
+            else:
+                self.run_check()
             return
 
-        # The checker intentionally does not expose the pseudo-package\n        # "phoneview-scrcpy" in the APT package list. Build state must therefore\n        # be derived from the actual PhoneView engine check, otherwise setup can\n        # finish installing system packages and immediately loop forever.\n        self.pending_scrcpy_build = not self.checker.scrcpy_ok()\n        system_packages = [
+        system_packages = [
             package for package in packages
             if package != "phoneview-scrcpy"
         ]
