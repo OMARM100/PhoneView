@@ -24,174 +24,19 @@ from PySide6.QtWidgets import (
 from core.dependency_checker import DependencyChecker
 
 
-PHONEVIEW_QSS = """
-QDialog { 
-    background-color: #0B0F19; 
-    color: #F1F5F9; 
-    font-family: "Segoe UI", "DejaVu Sans", "Noto Sans", sans-serif; 
-}
-QLabel { color: #F1F5F9; background: transparent; }
-QLabel#Eyebrow { color: #3B82F6; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
-QLabel#Subtitle, QLabel#Muted { color: #94A3B8; font-size: 11px; }
-QLabel#SectionTitle { color: #E2E8F0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
-QLabel#StatusTitle { color: #FFFFFF; font-size: 19px; font-weight: 900; }
-QLabel#StatusDetail { color: #94A3B8; font-size: 11px; line-height: 1.4; }
-QLabel#Percent { color: #3B82F6; font-size: 22px; font-weight: 900; }
-QLabel#SectionMeta { color: #64748B; font-size: 10px; font-weight: bold; }
+def _load_phoneview_qss():
+    """Load the setup-window theme from the easy-to-find ui/phoneview_setup.qss file."""
+    qss_path = os.path.join(os.path.dirname(__file__), "phoneview_setup.qss")
+    try:
+        with open(qss_path, "r", encoding="utf-8") as file:
+            return file.read()
+    except OSError:
+        # Keep startup resilient if a packaged/old install is missing the file.
+        return ""
 
-QFrame#TopLine { 
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #60A5FA); 
-    border-radius: 2px; 
-}
-QFrame#StatusCard { 
-    background-color: #111827; 
-    border: 1px solid #1F2937; 
-    border-radius: 16px; 
-}
-QFrame#StatusGlow { 
-    background-color: rgba(59, 130, 246, 0.12); 
-    border: 1px solid rgba(59, 130, 246, 0.2); 
-    border-radius: 21px; 
-}
-QFrame#Card { 
-    background-color: #111827; 
-    border: 1px solid #1F2937; 
-    border-radius: 16px; 
-}
-QFrame#DependencyRow { 
-    background-color: #1F2937; 
-    border: 1px solid #374151; 
-    border-radius: 10px; 
-}
-QFrame#DependencyRow:hover { 
-    background-color: #273345; 
-    border-color: #4B5563; 
-}
 
-QLabel#DependencyName { color: #F8FAFC; font-size: 11px; font-weight: 700; }
-QLabel#DependencyState { color: #94A3B8; font-size: 10px; font-weight: 800; }
-QLabel#StatusIcon { font-size: 12px; font-weight: 900; }
+PHONEVIEW_QSS = _load_phoneview_qss()
 
-QProgressBar { 
-    background-color: #1F2937; 
-    border: none; 
-    border-radius: 4px; 
-    min-height: 8px; 
-    max-height: 8px; 
-}
-QProgressBar::chunk { 
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
-    border-radius: 4px; 
-}
-
-QScrollArea { background: transparent; border: none; }
-QScrollBar:vertical {
-    background: #0F172A;
-    width: 8px;
-    margin: 2px 0;
-    border: none;
-    border-radius: 4px;
-}
-QScrollBar::handle:vertical {
-    background: #334155;
-    min-height: 28px;
-    border-radius: 4px;
-    border: 1px solid #475569;
-}
-QScrollBar::handle:vertical:hover {
-    background: #475569;
-    border-color: #64748B;
-}
-QScrollBar::handle:vertical:pressed {
-    background: #3B82F6;
-    border-color: #60A5FA;
-}
-QScrollBar::add-page:vertical,
-QScrollBar::sub-page:vertical {
-    background: transparent;
-}
-QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical {
-    height: 0;
-}
-
-QScrollBar:horizontal {
-    background: #0F172A;
-    height: 8px;
-    margin: 0 2px;
-    border: none;
-    border-radius: 4px;
-}
-QScrollBar::handle:horizontal {
-    background: #334155;
-    min-width: 28px;
-    border-radius: 4px;
-    border: 1px solid #475569;
-}
-QScrollBar::handle:horizontal:hover {
-    background: #475569;
-    border-color: #64748B;
-}
-QScrollBar::handle:horizontal:pressed {
-    background: #3B82F6;
-    border-color: #60A5FA;
-}
-QScrollBar::add-page:horizontal,
-QScrollBar::sub-page:horizontal {
-    background: transparent;
-}
-QScrollBar::add-line:horizontal,
-QScrollBar::sub-line:horizontal {
-    width: 0;
-}
-
-QTextEdit#ActivityLog { 
-    background-color: #05080F; 
-    color: #9CA3AF; 
-    border: 1px solid #1F2937; 
-    border-radius: 12px; 
-    padding: 12px; 
-    font-family: "Consolas", "DejaVu Sans Mono", monospace; 
-    font-size: 11px; 
-    selection-background-color: #3B82F6; 
-    selection-color: #FFFFFF; 
-}
-
-QPushButton { 
-    min-height: 36px; 
-    padding: 0 16px; 
-    border-radius: 8px; 
-    border: 1px solid #374151; 
-    background-color: #1F2937; 
-    color: #E2E8F0; 
-    font-size: 11px; 
-    font-weight: 800; 
-}
-QPushButton:hover { background-color: #374151; border-color: #4B5563; color: #FFFFFF; }
-QPushButton:pressed { background-color: #111827; }
-QPushButton:disabled { background-color: #111827; border-color: #1F2937; color: #4B5563; }
-
-QPushButton#Primary { 
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
-    border: none; 
-    color: #FFFFFF; 
-    min-width: 140px; 
-}
-QPushButton#Primary:hover { 
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #60A5FA); 
-}
-QPushButton#Primary:pressed { 
-    background-color: #1D4ED8; 
-    background: none; 
-}
-QPushButton#Primary:disabled { 
-    background: #1E3A8A; 
-    color: #60A5FA; 
-}
-
-QPushButton#Quiet { background: transparent; border-color: transparent; color: #94A3B8; }
-QPushButton#Quiet:hover { background-color: #1F2937; border-color: #374151; color: #F1F5F9; }
-"""
 
 
 class SetupWindow(QDialog):
