@@ -63,7 +63,7 @@ QFrame#DependencyRow {
     border: 1px solid #374151; 
     border-radius: 10px; 
 }
-QFrame#DependencyRow\:hover { 
+QFrame#DependencyRow:hover { 
     background-color: #273345; 
     border-color: #4B5563; 
 }
@@ -85,10 +85,65 @@ QProgressBar::chunk {
 }
 
 QScrollArea { background: transparent; border: none; }
-QScrollBar\:vertical { background: transparent; width: 6px; margin: 2px 0; }
-QScrollBar::handle\:vertical { background: #374151; min-height: 24px; border-radius: 3px; }
-QScrollBar::handle\:vertical\:hover { background: #4B5563; }
-QScrollBar::add-line\:vertical, QScrollBar::sub-line\:vertical { height: 0; }
+QScrollBar:vertical {
+    background: #0F172A;
+    width: 8px;
+    margin: 2px 0;
+    border: none;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #334155;
+    min-height: 28px;
+    border-radius: 4px;
+    border: 1px solid #475569;
+}
+QScrollBar::handle:vertical:hover {
+    background: #475569;
+    border-color: #64748B;
+}
+QScrollBar::handle:vertical:pressed {
+    background: #3B82F6;
+    border-color: #60A5FA;
+}
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #0F172A;
+    height: 8px;
+    margin: 0 2px;
+    border: none;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal {
+    background: #334155;
+    min-width: 28px;
+    border-radius: 4px;
+    border: 1px solid #475569;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #475569;
+    border-color: #64748B;
+}
+QScrollBar::handle:horizontal:pressed {
+    background: #3B82F6;
+    border-color: #60A5FA;
+}
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}
 
 QTextEdit#ActivityLog { 
     background-color: #05080F; 
@@ -112,9 +167,9 @@ QPushButton {
     font-size: 11px; 
     font-weight: 800; 
 }
-QPushButton\:hover { background-color: #374151; border-color: #4B5563; color: #FFFFFF; }
-QPushButton\:pressed { background-color: #111827; }
-QPushButton\:disabled { background-color: #111827; border-color: #1F2937; color: #4B5563; }
+QPushButton:hover { background-color: #374151; border-color: #4B5563; color: #FFFFFF; }
+QPushButton:pressed { background-color: #111827; }
+QPushButton:disabled { background-color: #111827; border-color: #1F2937; color: #4B5563; }
 
 QPushButton#Primary { 
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
@@ -122,20 +177,20 @@ QPushButton#Primary {
     color: #FFFFFF; 
     min-width: 140px; 
 }
-QPushButton#Primary\:hover { 
+QPushButton#Primary:hover { 
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #60A5FA); 
 }
-QPushButton#Primary\:pressed { 
+QPushButton#Primary:pressed { 
     background-color: #1D4ED8; 
     background: none; 
 }
-QPushButton#Primary\:disabled { 
+QPushButton#Primary:disabled { 
     background: #1E3A8A; 
     color: #60A5FA; 
 }
 
 QPushButton#Quiet { background: transparent; border-color: transparent; color: #94A3B8; }
-QPushButton#Quiet\:hover { background-color: #1F2937; border-color: #374151; color: #F1F5F9; }
+QPushButton#Quiet:hover { background-color: #1F2937; border-color: #374151; color: #F1F5F9; }
 """
 
 
