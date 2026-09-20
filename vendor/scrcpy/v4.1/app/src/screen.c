@@ -204,9 +204,18 @@ phoneview_load_controls(struct sc_screen *screen) {
         if (!phoneview_json_float(object, end, "y", &control.y)) {
             control.y = 0.45f;
         }
+        if (!phoneview_json_float(object, end, "size", &control.size)) {
+            control.size = 1.f;
+        }
+        if (!phoneview_json_float(object, end, "sensitivity",
+                                   &control.sensitivity)) {
+            control.sensitivity = 1.6f;
+        }
 
         control.x = SDL_clamp(control.x, 0.f, 1.f);
         control.y = SDL_clamp(control.y, 0.f, 1.f);
+        control.size = SDL_clamp(control.size, 0.5f, 3.f);
+        control.sensitivity = SDL_clamp(control.sensitivity, 0.1f, 5.f);
         control.runtime_x = control.x;
         control.runtime_y = control.y;
 
@@ -261,6 +270,8 @@ phoneview_save_controls(struct sc_screen *screen) {
                 control->type,
                 control->x,
                 control->y,
+                control->size > 0.f ? control->size : 1.f,
+                control->sensitivity > 0.f ? control->sensitivity : 1.6f,
                 control->behavior[0] ? control->behavior : "hold");
 
         if (control->mouse_button[0]) {
@@ -294,6 +305,44 @@ phoneview_point_in_rect(float x, float y, float rx, float ry,
     return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
 }
 
+static float
+phoneview_control_size(const struct sc_phoneview_control *control) {
+    if (!control || control->size <= 0.f) {
+        return 1.f;
+    }
+    return SDL_clamp(control->size, 0.5f, 3.f);
+}
+
+static bool
+phoneview_point_in_resize_handle(float x, float y,
+                                  float cx, float cy,
+                                  float w, float h) {
+    const float handle = 12.f;
+    float hx = cx + w / 2.f;
+    float hy = cy + h / 2.f;
+    return phoneview_point_in_rect(
+        x, y,
+        hx - handle / 2.f,
+        hy - handle / 2.f,
+        handle,
+        handle);
+}
+
+static float
+phoneview_control_resize_radius(const struct sc_phoneview_control *control) {
+    return PHONEVIEW_JOYSTICK_RADIUS * phoneview_control_size(control);
+}
+
+static float
+phoneview_control_width(const struct sc_phoneview_control *control) {
+    return PHONEVIEW_CONTROL_W * phoneview_control_size(control);
+}
+
+static float
+phoneview_control_height(const struct sc_phoneview_control *control) {
+    return PHONEVIEW_CONTROL_H * phoneview_control_size(control);
+}
+
 static int
 phoneview_hit_control(struct sc_screen *screen, float x, float y,
                        float width, float height) {
@@ -306,26 +355,25 @@ phoneview_hit_control(struct sc_screen *screen, float x, float y,
         float cy = control->y * height;
 
         if (!strcmp(control->type, "joystick")) {
+            float radius = phoneview_control_resize_radius(control) + 8.f;
             float dx = x - cx;
             float dy = y - cy;
-            float radius = PHONEVIEW_JOYSTICK_RADIUS + 8.f;
             if (dx * dx + dy * dy <= radius * radius) {
                 return (int) index;
             }
             continue;
         }
 
-        float bx = cx - PHONEVIEW_CONTROL_W / 2.f;
-        float by = cy - PHONEVIEW_CONTROL_H / 2.f;
-        if (phoneview_point_in_rect(x, y, bx, by,
-                                    PHONEVIEW_CONTROL_W,
-                                    PHONEVIEW_CONTROL_H)) {
+        float cw = phoneview_control_width(control);
+        float ch = phoneview_control_height(control);
+        float bx = cx - cw / 2.f;
+        float by = cy - ch / 2.f;
+        if (phoneview_point_in_rect(x, y, bx, by, cw, ch)) {
             return (int) index;
         }
     }
     return -1;
 }
-
 
 static struct sc_phoneview_control *
 phoneview_find_mouse_control(struct sc_screen *screen, const char *button,
@@ -711,10 +759,12 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
             continue;
         }
 
+        float sensitivity =
+            control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
         control->runtime_x +=
-            event->xrel / MAX(1.f, screen->rect.w) * 1.6f;
+            event->xrel / MAX(1.f, screen->rect.w) * sensitivity;
         control->runtime_y +=
-            event->yrel / MAX(1.f, screen->rect.h) * 1.6f;
+            event->yrel / MAX(1.f, screen->rect.h) * sensitivity;
 
         control->runtime_x =
             SDL_clamp(control->runtime_x, 0.01f, 0.99f);
@@ -797,6 +847,8 @@ phoneview_capture_keyboard(struct sc_screen *screen,
             snprintf(control->behavior, sizeof(control->behavior), "hold");
             control->x = 0.45f;
             control->y = 0.72f;
+            control->size = 1.f;
+            control->sensitivity = 1.0f;
         }
 
         switch (screen->phoneview.capture_stage) {
@@ -865,6 +917,8 @@ phoneview_capture_keyboard(struct sc_screen *screen,
     control->y = 0.45f;
     control->runtime_x = control->x;
     control->runtime_y = control->y;
+    control->size = 1.f;
+    control->sensitivity = 1.6f;
 
     screen->phoneview.capture_mode = false;
     screen->phoneview.capture_stage = 0;
@@ -1093,13 +1147,15 @@ phoneview_render_controls(struct sc_screen *screen) {
                      && (int) i == screen->phoneview.selected_index;
         bool pressed = control->active || control->source_down;
 
+        float control_scale = phoneview_control_size(control);
+
         if (!strcmp(control->type, "joystick")) {
             SDL_SetRenderDrawBlendMode(screen->renderer, SDL_BLENDMODE_BLEND);
 
             phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
-                PHONEVIEW_JOYSTICK_RADIUS,
+                PHONEVIEW_JOYSTICK_RADIUS * control_scale,
                 18, 30, 45,
                 editing ? (selected ? 210 : 165)
                         : (pressed ? 145 : 85));
@@ -1114,7 +1170,7 @@ phoneview_render_controls(struct sc_screen *screen) {
             phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
-                PHONEVIEW_JOYSTICK_RADIUS - 3.f,
+                (PHONEVIEW_JOYSTICK_RADIUS * control_scale) - 3.f,
                 18, 30, 45,
                 editing ? (selected ? 210 : 165)
                         : (pressed ? 145 : 85));
@@ -1128,14 +1184,15 @@ phoneview_render_controls(struct sc_screen *screen) {
                 dy *= 0.7071f;
             }
 
-            float knob_distance = PHONEVIEW_JOYSTICK_RADIUS * 0.48f;
+            float knob_distance =
+                PHONEVIEW_JOYSTICK_RADIUS * control_scale * 0.48f;
             float kx = cx + dx * knob_distance;
             float ky = cy + dy * knob_distance;
 
             phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
-                PHONEVIEW_JOYSTICK_KNOB_RADIUS,
+                PHONEVIEW_JOYSTICK_KNOB_RADIUS * control_scale,
                 60, 135, 245,
                 editing ? (selected ? 245 : 220)
                         : (pressed ? 245 : 200));
@@ -1148,7 +1205,7 @@ phoneview_render_controls(struct sc_screen *screen) {
             phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
-                PHONEVIEW_JOYSTICK_KNOB_RADIUS - 3.f,
+                (PHONEVIEW_JOYSTICK_KNOB_RADIUS * control_scale) - 3.f,
                 60, 135, 245,
                 editing ? (selected ? 245 : 220)
                         : (pressed ? 245 : 190));
@@ -1164,22 +1221,24 @@ phoneview_render_controls(struct sc_screen *screen) {
             continue;
         }
 
-        float bx = cx - PHONEVIEW_CONTROL_W / 2.f;
-        float by = cy - PHONEVIEW_CONTROL_H / 2.f;
+        float cw = PHONEVIEW_CONTROL_W * control_scale;
+        float ch = PHONEVIEW_CONTROL_H * control_scale;
+        float bx = cx - cw / 2.f;
+        float by = cy - ch / 2.f;
 
         bx = SDL_clamp(bx,
                        origin_x,
-                       origin_x + MAX(0.f, width - PHONEVIEW_CONTROL_W));
+                       origin_x + MAX(0.f, width - cw));
         by = SDL_clamp(by,
                        origin_y,
-                       origin_y + MAX(0.f, height - PHONEVIEW_CONTROL_H));
+                       origin_y + MAX(0.f, height - ch));
 
         uint8_t alpha = editing
                        ? (selected ? 240 : 210)
                        : (pressed ? 155 : 78);
         phoneview_draw_box(screen->renderer,
                            bx, by,
-                           PHONEVIEW_CONTROL_W, PHONEVIEW_CONTROL_H,
+                           cw, ch,
                            pressed ? 45 : (selected ? 42 : 32),
                            pressed ? 155 : (selected ? 145 : 115),
                            pressed ? 255 : (selected ? 245 : 229),
@@ -1206,6 +1265,24 @@ phoneview_render_controls(struct sc_screen *screen) {
 
         phoneview_draw_text(screen->renderer, bx + 8.f, by + 17.f,
                             display);
+
+        if (editing && selected) {
+            const float handle = 10.f;
+            SDL_SetRenderDrawColor(screen->renderer, 255, 255, 255, 235);
+
+            SDL_FRect handles[4] = {
+                {bx - handle / 2.f, by - handle / 2.f, handle, handle},
+                {bx + cw - handle / 2.f, by - handle / 2.f,
+                 handle, handle},
+                {bx - handle / 2.f, by + ch - handle / 2.f,
+                 handle, handle},
+                {bx + cw - handle / 2.f, by + ch - handle / 2.f,
+                 handle, handle},
+            };
+            for (size_t h = 0; h < 4; ++h) {
+                SDL_RenderFillRect(screen->renderer, &handles[h]);
+            }
+        }
     }
 }
 
@@ -1226,7 +1303,11 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             screen->phoneview.capture_mode = false;
             screen->phoneview.capture_stage = 0;
             screen->phoneview.dragging = false;
+            screen->phoneview.resizing = false;
             screen->phoneview.drag_index = -1;
+            screen->phoneview.resize_index = -1;
+            screen->phoneview.resize_start_size = 1.f;
+            screen->phoneview.resize_start_distance = 0.f;
             screen->phoneview.selected_index = -1;
             screen->phoneview.last_click_index = -1;
             screen->phoneview.last_click_time = 0;
@@ -1261,6 +1342,8 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
                 snprintf(control->right_key, sizeof(control->right_key), "D");
                 control->x = 0.16f;
                 control->y = 0.78f;
+                control->size = 1.f;
+                control->sensitivity = 1.0f;
                 control->runtime_x = control->x;
                 control->runtime_y = control->y;
 
@@ -1318,6 +1401,67 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
         case SC_PHONEVIEW_UI_ACTION_SAVE:
             if (screen->phoneview.edit_mode) {
                 phoneview_save_controls(screen);
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui, "All changes saved");
+            }
+            break;
+
+        case SC_PHONEVIEW_UI_ACTION_DUPLICATE:
+            if (screen->phoneview.edit_mode
+                    && screen->phoneview.selected_index >= 0
+                    && (size_t) screen->phoneview.selected_index
+                       < screen->phoneview.count
+                    && screen->phoneview.count < PHONEVIEW_MAX_CONTROLS) {
+                size_t source_index =
+                    (size_t) screen->phoneview.selected_index;
+                struct sc_phoneview_control copy =
+                    screen->phoneview.controls[source_index];
+
+                copy.x = SDL_clamp(copy.x + 0.05f, 0.02f, 0.98f);
+                copy.y = SDL_clamp(copy.y + 0.05f, 0.02f, 0.98f);
+                copy.active = false;
+                copy.source_down = false;
+                copy.active_up = false;
+                copy.active_left = false;
+                copy.active_down = false;
+                copy.active_right = false;
+                copy.runtime_x = copy.x;
+                copy.runtime_y = copy.y;
+
+                screen->phoneview.controls[screen->phoneview.count] = copy;
+                screen->phoneview.selected_index =
+                    (int) screen->phoneview.count;
+                screen->phoneview.count++;
+
+                phoneview_save_controls(screen);
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui, "Control duplicated");
+                sc_screen_render(screen, false);
+            }
+            break;
+
+        case SC_PHONEVIEW_UI_ACTION_DELETE:
+            if (screen->phoneview.edit_mode
+                    && screen->phoneview.selected_index >= 0
+                    && (size_t) screen->phoneview.selected_index
+                       < screen->phoneview.count) {
+                size_t index =
+                    (size_t) screen->phoneview.selected_index;
+                for (size_t i = index; i + 1 < screen->phoneview.count; ++i) {
+                    screen->phoneview.controls[i] =
+                        screen->phoneview.controls[i + 1];
+                }
+                screen->phoneview.count--;
+                screen->phoneview.selected_index = -1;
+                screen->phoneview.dragging = false;
+                screen->phoneview.resizing = false;
+                screen->phoneview.drag_index = -1;
+                screen->phoneview.resize_index = -1;
+
+                phoneview_save_controls(screen);
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui, "Control deleted");
+                sc_screen_render(screen, false);
             }
             break;
 
@@ -1450,6 +1594,9 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 screen->phoneview.count--;
                 screen->phoneview.selected_index = -1;
                 phoneview_save_controls(screen);
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui,
+                    "Control deleted");
                 sc_screen_render(screen, false);
             }
 
@@ -1457,8 +1604,40 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         }
 
         if (event->button.button == SDL_BUTTON_LEFT) {
+            uint64_t now = SDL_GetTicks();
+
             if (index >= 0) {
-                uint64_t now = SDL_GetTicks();
+                struct sc_phoneview_control *control =
+                    &screen->phoneview.controls[index];
+                float scale = phoneview_control_size(control);
+
+                bool is_joystick = !strcmp(control->type, "joystick");
+                float cw = is_joystick
+                    ? PHONEVIEW_JOYSTICK_RADIUS * 2.f * scale
+                    : phoneview_control_width(control);
+                float ch = is_joystick
+                    ? PHONEVIEW_JOYSTICK_RADIUS * 2.f * scale
+                    : phoneview_control_height(control);
+                float cx = control->x * screen->rect.w;
+                float cy = control->y * screen->rect.h;
+
+                if (screen->phoneview.selected_index == index) {
+                    if (phoneview_point_in_resize_handle(
+                            local_x, local_y, cx, cy, cw, ch)) {
+                        screen->phoneview.resizing = true;
+                        screen->phoneview.resize_index = index;
+                        screen->phoneview.dragging = false;
+                        screen->phoneview.drag_index = -1;
+                        screen->phoneview.resize_start_size = scale;
+
+                        float dx = local_x - cx;
+                        float dy = local_y - cy;
+                        screen->phoneview.resize_start_distance =
+                            SDL_sqrtf(dx * dx + dy * dy);
+                        return true;
+                    }
+                }
+
                 bool double_click =
                     screen->phoneview.last_click_index == index
                     && now >= screen->phoneview.last_click_time
@@ -1471,7 +1650,9 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                     screen->phoneview.last_click_index = -1;
                     screen->phoneview.last_click_time = 0;
                     screen->phoneview.dragging = false;
+                    screen->phoneview.resizing = false;
                     screen->phoneview.drag_index = -1;
+                    screen->phoneview.resize_index = -1;
 
                     struct sc_phoneview_control *control =
                         &screen->phoneview.controls[index];
@@ -1495,6 +1676,9 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                              control->down_key);
                     snprintf(edit.right_key, sizeof(edit.right_key), "%s",
                              control->right_key);
+                    edit.size = scale;
+                    edit.sensitivity = control->sensitivity > 0.f
+                        ? control->sensitivity : 1.6f;
 
                     if (sc_phoneview_ui_edit_control(
                             screen->phoneview.ui, &edit)) {
@@ -1519,8 +1703,14 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                         snprintf(control->right_key,
                                  sizeof(control->right_key), "%s",
                                  edit.right_key);
+                        control->size = SDL_clamp(edit.size, 0.5f, 3.f);
+                        control->sensitivity =
+                            SDL_clamp(edit.sensitivity, 0.1f, 5.f);
 
                         phoneview_save_controls(screen);
+                        sc_phoneview_ui_set_capture_status(
+                            screen->phoneview.ui,
+                            "Control updated");
                     }
 
                     sc_phoneview_ui_focus_video(screen->phoneview.ui);
@@ -1537,7 +1727,9 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 screen->phoneview.last_click_index = -1;
                 screen->phoneview.last_click_time = 0;
                 screen->phoneview.dragging = false;
+                screen->phoneview.resizing = false;
                 screen->phoneview.drag_index = -1;
+                screen->phoneview.resize_index = -1;
             }
 
             sc_screen_render(screen, false);
@@ -1548,6 +1740,45 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
     }
 
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
+        if (screen->phoneview.resizing) {
+            int index = screen->phoneview.resize_index;
+            if (index >= 0 && (size_t) index < screen->phoneview.count) {
+                struct sc_phoneview_control *control =
+                    &screen->phoneview.controls[index];
+
+                float cx = control->x * screen->rect.w;
+                float cy = control->y * screen->rect.h;
+                float distance = SDL_sqrtf(
+                    (event->motion.x - screen->rect.x - cx)
+                    * (event->motion.x - screen->rect.x - cx)
+                    + (event->motion.y - screen->rect.y - cy)
+                    * (event->motion.y - screen->rect.y - cy));
+
+                if (distance > 2.f) {
+                    if (!strcmp(control->type, "joystick")) {
+                        control->size = SDL_clamp(
+                            distance / PHONEVIEW_JOYSTICK_RADIUS,
+                            0.5f, 3.f);
+                    } else {
+                        float dx = SDL_fabsf(
+                            event->motion.x - screen->rect.x - cx);
+                        float dy = SDL_fabsf(
+                            event->motion.y - screen->rect.y - cy);
+                        float base_x = PHONEVIEW_CONTROL_W / 2.f;
+                        float base_y = PHONEVIEW_CONTROL_H / 2.f;
+                        float scale_x = dx / MAX(4.f, base_x);
+                        float scale_y = dy / MAX(4.f, base_y);
+                        control->size = SDL_clamp(
+                            MAX(scale_x, scale_y),
+                            0.5f, 3.f);
+                    }
+                    screen->phoneview.selected_index = index;
+                    sc_screen_render(screen, false);
+                }
+            }
+            return true;
+        }
+
         if (!screen->phoneview.dragging) {
             return true;
         }
@@ -1578,10 +1809,24 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_UP
             && event->button.button == SDL_BUTTON_LEFT) {
+        if (screen->phoneview.resizing) {
+            screen->phoneview.resizing = false;
+            screen->phoneview.resize_index = -1;
+            phoneview_save_controls(screen);
+            sc_phoneview_ui_set_capture_status(
+                screen->phoneview.ui,
+                "Control size saved");
+            sc_screen_render(screen, false);
+            return true;
+        }
+
         if (screen->phoneview.dragging) {
             screen->phoneview.dragging = false;
             screen->phoneview.drag_index = -1;
             phoneview_save_controls(screen);
+            sc_phoneview_ui_set_capture_status(
+                screen->phoneview.ui,
+                "Control position saved");
             sc_screen_render(screen, false);
         }
         return true;
