@@ -824,11 +824,26 @@ sc_phoneview_ui_create(const char *title,
         return NULL;
     }
 
-    XSelectInput(xdisplay,
-                 ui->video_xid,
-                 ExposureMask | StructureNotifyMask);
+    XSelectInput(
+        xdisplay,
+        ui->video_xid,
+        ExposureMask
+            | StructureNotifyMask
+            | ButtonPressMask
+            | ButtonReleaseMask
+            | PointerMotionMask
+            | EnterWindowMask
+            | LeaveWindowMask
+            | FocusChangeMask);
     XMapRaised(xdisplay, ui->video_xid);
     XFlush(xdisplay);
+
+    /*
+     * This SDL window wraps the X11 child created by PhoneView. Explicitly
+     * enable SDL's external-window input path so relative mouse motion is
+     * delivered reliably on X11.
+     */
+    SDL_SetHint(SDL_HINT_VIDEO_X11_EXTERNAL_WINDOW_INPUT, "1");
 
     SDL_PropertiesID props = SDL_CreateProperties();
     if (!props) {
