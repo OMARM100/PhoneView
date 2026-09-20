@@ -133,6 +133,7 @@ dependencies = [
 
 if host_machine.system() == 'linux'
     dependencies += dependency('gtk+-3.0', version: '>= 3.20')
+    dependencies += dependency('x11')
 endif
 
 if v4l2_support
