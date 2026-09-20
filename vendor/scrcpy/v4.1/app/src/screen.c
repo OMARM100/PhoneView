@@ -783,6 +783,33 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
     return handled;
 }
 
+
+static void
+phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
+                                       bool enabled) {
+    if (!screen || !screen->window) {
+        return;
+    }
+
+    if (enabled) {
+        if (screen->phoneview.mouse_look_relative_mode) {
+            return;
+        }
+
+        screen->phoneview.mouse_look_previous_relative_mode =
+            SDL_GetWindowRelativeMouseMode(screen->window);
+
+        if (SDL_SetWindowRelativeMouseMode(screen->window, true)) {
+            screen->phoneview.mouse_look_relative_mode = true;
+        }
+    } else if (screen->phoneview.mouse_look_relative_mode) {
+        (void) SDL_SetWindowRelativeMouseMode(
+            screen->window,
+            screen->phoneview.mouse_look_previous_relative_mode);
+        screen->phoneview.mouse_look_relative_mode = false;
+    }
+}
+
 static bool
 phoneview_handle_mapped_mouse(struct sc_screen *screen,
                                const SDL_MouseButtonEvent *event) {
@@ -806,10 +833,21 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
                 look->source_down = true;
                 look->runtime_x = look->x;
                 look->runtime_y = look->y;
+
+                /*
+                 * Keep the cursor captured in relative mode while looking.
+                 * This prevents the camera from stopping at the edge of the
+                 * PhoneView window and gives SDL reliable xrel/yrel events.
+                 */
+                phoneview_set_mouse_look_relative_mode(screen, true);
+
                 if (phoneview_push_touch_at(
                         screen, look, index, AMOTION_EVENT_ACTION_DOWN,
                         look->runtime_x, look->runtime_y)) {
                     look->active = true;
+                } else {
+                    look->source_down = false;
+                    phoneview_set_mouse_look_relative_mode(screen, false);
                 }
             }
         } else {
@@ -820,6 +858,7 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
                     look->runtime_x, look->runtime_y);
                 look->active = false;
             }
+            phoneview_set_mouse_look_relative_mode(screen, false);
         }
 
         return true;
@@ -892,10 +931,12 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
 
         float sensitivity =
             control->sensitivity > 0.01f ? control->sensitivity : 1.6f;
+        const float look_gain = 2.5f * sensitivity;
+
         control->runtime_x +=
-            event->xrel / MAX(1.f, screen->rect.w) * sensitivity;
+            event->xrel / MAX(1.f, screen->rect.w) * look_gain;
         control->runtime_y +=
-            event->yrel / MAX(1.f, screen->rect.h) * sensitivity;
+            event->yrel / MAX(1.f, screen->rect.h) * look_gain;
 
         control->runtime_x =
             SDL_clamp(control->runtime_x, 0.01f, 0.99f);
@@ -906,6 +947,10 @@ phoneview_handle_mouse_look_motion(struct sc_screen *screen,
             screen, control, i, AMOTION_EVENT_ACTION_MOVE,
             control->runtime_x, control->runtime_y);
         handled = true;
+    }
+
+    if (handled) {
+        sc_screen_render(screen, false);
     }
 
     return handled;
@@ -1237,6 +1282,53 @@ phoneview_draw_text(SDL_Renderer *renderer, float x, float y,
     (void) SDL_RenderDebugText(renderer, x, y, text);
 }
 
+
+static void
+phoneview_draw_control_label(SDL_Renderer *renderer,
+                             float x,
+                             float y,
+                             float w,
+                             float h,
+                             const char *label,
+                             float scale) {
+    if (!label || !label[0]) {
+        return;
+    }
+
+    /*
+     * SDL_RenderDebugText uses a fixed-size debug font. Do not let that
+     * fixed font overflow a small control: compact the caption as the
+     * control gets smaller and center it in the control.
+     */
+    if (scale < 0.62f) {
+        return;
+    }
+
+    char text[16];
+    snprintf(text, sizeof(text), "%s", label);
+
+    size_t max_chars;
+    if (scale < 0.78f) {
+        max_chars = 1;
+    } else if (scale < 0.95f) {
+        max_chars = 3;
+    } else {
+        max_chars = 8;
+    }
+
+    if (strlen(text) > max_chars) {
+        text[max_chars] = '\0';
+    }
+
+    const float char_width = 8.f;
+    const float char_height = 8.f;
+    float text_w = (float) strlen(text) * char_width;
+    float tx = x + MAX(3.f, (w - text_w) / 2.f);
+    float ty = y + MAX(2.f, (h - char_height) / 2.f);
+
+    phoneview_draw_text(renderer, tx, ty, text);
+}
+
 static void
 phoneview_render_controls(struct sc_screen *screen) {
     if (!screen->phoneview.enabled || !screen->window_shown) {
@@ -1344,18 +1436,43 @@ phoneview_render_controls(struct sc_screen *screen) {
             float text_offset_y = 36.f * control_scale;
             float text_offset_x = 30.f * control_scale;
 
-            phoneview_draw_text(screen->renderer, cx - 4.f,
-                                cy - text_offset_y,
-                                control->up_key[0] ? control->up_key : "W");
-            phoneview_draw_text(screen->renderer, cx - 4.f,
-                                cy + 28.f * control_scale,
-                                control->down_key[0] ? control->down_key : "S");
-            phoneview_draw_text(screen->renderer, cx - text_offset_x,
-                                cy - 4.f,
-                                control->left_key[0] ? control->left_key : "A");
-            phoneview_draw_text(screen->renderer, cx + 24.f * control_scale,
-                                cy - 4.f,
-                                control->right_key[0] ? control->right_key : "D");
+            if (control_scale >= 0.78f) {
+                phoneview_draw_control_label(
+                    screen->renderer,
+                    cx - 14.f * control_scale,
+                    cy - 47.f * control_scale,
+                    28.f * control_scale,
+                    18.f * control_scale,
+                    control->up_key[0] ? control->up_key : "W",
+                    control_scale);
+
+                phoneview_draw_control_label(
+                    screen->renderer,
+                    cx - 14.f * control_scale,
+                    cy + 29.f * control_scale,
+                    28.f * control_scale,
+                    18.f * control_scale,
+                    control->down_key[0] ? control->down_key : "S",
+                    control_scale);
+
+                phoneview_draw_control_label(
+                    screen->renderer,
+                    cx - 47.f * control_scale,
+                    cy - 9.f * control_scale,
+                    28.f * control_scale,
+                    18.f * control_scale,
+                    control->left_key[0] ? control->left_key : "A",
+                    control_scale);
+
+                phoneview_draw_control_label(
+                    screen->renderer,
+                    cx + 19.f * control_scale,
+                    cy - 9.f * control_scale,
+                    28.f * control_scale,
+                    18.f * control_scale,
+                    control->right_key[0] ? control->right_key : "D",
+                    control_scale);
+            }
 
             if (editing && selected) {
                 const float handle = 10.f;
@@ -1414,8 +1531,8 @@ phoneview_render_controls(struct sc_screen *screen) {
                      control->label);
         }
 
-        phoneview_draw_text(screen->renderer, bx + 8.f, by + 17.f,
-                            display);
+        phoneview_draw_control_label(
+            screen->renderer, bx, by, cw, ch, display, control_scale);
 
         if (editing && selected) {
             const float handle = 10.f;
@@ -1449,6 +1566,7 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
 
     switch (action) {
         case SC_PHONEVIEW_UI_ACTION_EDIT:
+            phoneview_set_mouse_look_relative_mode(screen, false);
             phoneview_load_controls(screen);
             for (size_t i = 0; i < screen->phoneview.count; ++i) {
                 phoneview_clamp_control_position(
@@ -1479,78 +1597,84 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             int add_type = sc_phoneview_ui_get_add_type(
                 screen->phoneview.ui);
 
-            if (add_type == SC_PHONEVIEW_ADD_JOYSTICK) {
-                if (screen->phoneview.count >= PHONEVIEW_MAX_CONTROLS) {
-                    break;
-                }
-
-                struct sc_phoneview_control *control =
-                    &screen->phoneview.controls[screen->phoneview.count++];
-
-                memset(control, 0, sizeof(*control));
-                snprintf(control->label, sizeof(control->label), "WASD");
-                snprintf(control->type, sizeof(control->type), "joystick");
-                snprintf(control->behavior, sizeof(control->behavior), "hold");
-                snprintf(control->up_key, sizeof(control->up_key), "W");
-                snprintf(control->left_key, sizeof(control->left_key), "A");
-                snprintf(control->down_key, sizeof(control->down_key), "S");
-                snprintf(control->right_key, sizeof(control->right_key), "D");
-                control->x = 0.16f;
-                control->y = 0.78f;
-                control->size = 1.f;
-                control->sensitivity = 1.0f;
-                control->runtime_x = control->x;
-                control->runtime_y = control->y;
-
-                screen->phoneview.selected_index =
-                    (int) screen->phoneview.count - 1;
-                screen->phoneview.capture_mode = false;
-                phoneview_save_controls(screen);
+            struct sc_phoneview_control_edit edit = {0};
+            if (!sc_phoneview_ui_configure_new_control(
+                    screen->phoneview.ui, add_type, &edit)) {
                 sc_phoneview_ui_set_capture_mode(
                     screen->phoneview.ui, false);
-                sc_phoneview_ui_set_capture_status(
-                    screen->phoneview.ui,
-                    "WASD joystick added  •  double-click to edit");
-                sc_screen_render(screen, false);
                 break;
             }
 
-            screen->phoneview.capture_mode = true;
-            screen->phoneview.capture_stage = 0;
-            screen->phoneview.dragging = false;
-            screen->phoneview.drag_index = -1;
-
-            switch (add_type) {
-                case SC_PHONEVIEW_ADD_KEYBOARD:
-                    phoneview_set_capture_status(
-                        screen, "Keyboard  •  press a key");
-                    break;
-                case SC_PHONEVIEW_ADD_TAP:
-                    phoneview_set_capture_status(
-                        screen, "Tap Key  •  press a key");
-                    break;
-                case SC_PHONEVIEW_ADD_TOGGLE:
-                    phoneview_set_capture_status(
-                        screen, "Toggle Key  •  press a key");
-                    break;
-                case SC_PHONEVIEW_ADD_MOUSE:
-                    phoneview_set_capture_status(
-                        screen, "Mouse Button  •  press a button");
-                    break;
-                case SC_PHONEVIEW_ADD_LOOK:
-                    phoneview_set_capture_status(
-                        screen, "Mouse Look  •  press camera button");
-                    break;
-                case SC_PHONEVIEW_ADD_WHEEL:
-                    phoneview_set_capture_status(
-                        screen, "Mouse Wheel  •  scroll");
-                    break;
-                default:
-                    break;
+            if (screen->phoneview.count >= PHONEVIEW_MAX_CONTROLS) {
+                sc_phoneview_ui_set_capture_status(
+                    screen->phoneview.ui,
+                    "Control limit reached");
+                break;
             }
 
-            sc_screen_render(screen, false);
-            break;
+            struct sc_phoneview_control *control =
+                &screen->phoneview.controls[screen->phoneview.count];
+
+            memset(control, 0, sizeof(*control));
+            snprintf(control->label, sizeof(control->label), "%s",
+                     edit.label);
+            snprintf(control->key, sizeof(control->key), "%s",
+                     edit.key);
+            snprintf(control->type, sizeof(control->type), "%s",
+                     edit.type);
+            snprintf(control->mouse_button,
+                     sizeof(control->mouse_button), "%s",
+                     edit.mouse_button);
+            snprintf(control->behavior, sizeof(control->behavior), "%s",
+                     edit.behavior);
+            snprintf(control->up_key, sizeof(control->up_key), "%s",
+                     edit.up_key);
+            snprintf(control->left_key, sizeof(control->left_key), "%s",
+                     edit.left_key);
+            snprintf(control->down_key, sizeof(control->down_key), "%s",
+                     edit.down_key);
+            snprintf(control->right_key, sizeof(control->right_key), "%s",
+                     edit.right_key);
+            control->size = SDL_clamp(
+                edit.size > 0.f ? edit.size : 1.f, 0.5f, 3.f);
+            control->sensitivity = SDL_clamp(
+                edit.sensitivity > 0.f ? edit.sensitivity : 1.6f,
+                0.1f, 5.f);
+
+            size_t new_index = screen->phoneview.count++;
+            if (!strcmp(control->type, "joystick")) {
+                control->x = 0.18f;
+                control->y = 0.78f;
+            } else if (!strcmp(control->type, "look")) {
+                control->x = 0.72f;
+                control->y = 0.72f;
+            } else {
+                const size_t slot = new_index % 4;
+                const size_t row = (new_index / 4) % 3;
+                control->x = 0.28f + 0.17f * (float) slot;
+                control->y = 0.28f + 0.16f * (float) row;
+            }
+
+            control->runtime_x = control->x;
+            control->runtime_y = control->y;
+            phoneview_clamp_control_position(
+                control, screen->rect.w, screen->rect.h);
+
+            screen->phoneview.selected_index = (int) new_index;
+            screen->phoneview.capture_mode = false;
+            screen->phoneview.capture_stage = 0;
+            screen->phoneview.dragging = false;
+            screen->phoneview.resizing = false;
+            screen->phoneview.drag_index = -1;
+            screen->phoneview.resize_index = -1;
+
+            phoneview_save_controls(screen);
+            sc_phoneview_ui_set_capture_mode(
+                screen->phoneview.ui, false);
+            sc_phoneview_ui_set_capture_status(
+                screen->phoneview.ui,
+                "Control added  •  drag it into position");
+            sc_screen_render(screen, false);            break;
         }
 
         case SC_PHONEVIEW_UI_ACTION_SAVE:
@@ -1621,6 +1745,7 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             break;
 
         case SC_PHONEVIEW_UI_ACTION_DONE:
+            phoneview_set_mouse_look_relative_mode(screen, false);
             screen->phoneview.capture_mode = false;
             screen->phoneview.capture_stage = 0;
             screen->phoneview.edit_mode = false;
@@ -1637,6 +1762,7 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             break;
 
         case SC_PHONEVIEW_UI_ACTION_CLOSE:
+            phoneview_set_mouse_look_relative_mode(screen, false);
             sc_push_event(SDL_EVENT_QUIT);
             break;
     }
@@ -1752,16 +1878,6 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
             return true;
         }
 
-        int add_type =
-            sc_phoneview_ui_get_add_type(screen->phoneview.ui);
-
-        if (add_type == SC_PHONEVIEW_ADD_KEYBOARD
-                || add_type == SC_PHONEVIEW_ADD_TAP
-                || add_type == SC_PHONEVIEW_ADD_TOGGLE
-                || add_type == SC_PHONEVIEW_ADD_JOYSTICK) {
-            phoneview_capture_keyboard(screen, &event->key);
-        }
-
         return true;
     }
 
@@ -1769,24 +1885,7 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         return true;
     }
 
-    if (event->type == SDL_EVENT_MOUSE_WHEEL
-            && screen->phoneview.capture_mode) {
-        phoneview_capture_wheel(screen,
-                                event->wheel.x,
-                                event->wheel.y);
-        return true;
-    }
 
-    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN
-            && screen->phoneview.capture_mode) {
-        int add_type =
-            sc_phoneview_ui_get_add_type(screen->phoneview.ui);
-        if (add_type == SC_PHONEVIEW_ADD_MOUSE
-                || add_type == SC_PHONEVIEW_ADD_LOOK) {
-            phoneview_capture_mouse(screen, event->button.button);
-        }
-        return true;
-    }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         float local_x = event->button.x - screen->rect.x;
@@ -2724,6 +2823,9 @@ sc_screen_init(struct sc_screen *screen,
     screen->phoneview.enabled = getenv("PHONEVIEW_MAPPING") != NULL;
     screen->phoneview.ui = NULL;
     screen->phoneview.drag_index = -1;
+    screen->phoneview.resize_index = -1;
+    screen->phoneview.mouse_look_relative_mode = false;
+    screen->phoneview.mouse_look_previous_relative_mode = false;
     if (screen->phoneview.enabled) {
         phoneview_load_controls(screen);
     }
@@ -3441,6 +3543,11 @@ sc_screen_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 sc_screen_render(screen, true);
             }
             return;
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            if (screen->phoneview.mouse_look_relative_mode) {
+                phoneview_set_mouse_look_relative_mode(screen, false);
+            }
+            break;
         case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
             LOGD("Switched to fullscreen mode");
             assert(screen->video);
