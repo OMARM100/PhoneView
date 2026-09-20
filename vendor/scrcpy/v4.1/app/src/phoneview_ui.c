@@ -86,8 +86,7 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
     gtk_widget_set_visible(ui->done_button, ui->edit_mode);
     gtk_widget_set_visible(ui->separator, ui->edit_mode);
 
-    gtk_widget_set_visible(ui->status_label,
-                           ui->edit_mode && ui->capture_mode);
+    gtk_widget_set_visible(ui->status_label, ui->edit_mode);
 
     if (!ui->edit_mode) {
         gtk_label_set_text(GTK_LABEL(ui->status_label), "");
