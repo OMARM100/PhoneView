@@ -2,6 +2,7 @@
 #include "phoneview_ui.h"
 
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -351,7 +352,6 @@ sc_phoneview_ui_create(const char *title,
      */
     ui->headerbar = gtk_header_bar_new();
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(ui->headerbar), FALSE);
-    gtk_header_bar_set_title_widget(GTK_HEADER_BAR(ui->headerbar), NULL);
     gtk_widget_set_name(ui->headerbar, "phoneview-titlebar");
     gtk_widget_set_size_request(ui->headerbar, -1,
                                 PHONEVIEW_UI_TITLEBAR_HEIGHT);
