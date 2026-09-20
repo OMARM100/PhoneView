@@ -1509,8 +1509,6 @@ phoneview_render_controls(struct sc_screen *screen) {
                 editing ? (selected ? 245 : 220)
                         : (pressed ? 245 : 190));
 
-            float text_offset_y = 36.f * control_scale;
-            float text_offset_x = 30.f * control_scale;
 
             if (control_scale >= 0.78f) {
                 phoneview_draw_control_label(
@@ -2822,6 +2820,46 @@ sc_screen_frame_sink_push_session(struct sc_frame_sink *sink,
                                   const struct sc_stream_session *session) {
     struct sc_screen *screen = DOWNCAST(sink);
     screen->current_session = *session;
+    return true;
+}
+
+static bool
+phoneview_set_mouse_look_relative_mode(struct sc_screen *screen,
+                                       bool enabled) {
+    if (!screen || !screen->window) {
+        return false;
+    }
+
+    if (screen->phoneview.mouse_look_relative_mode == enabled) {
+        return true;
+    }
+
+    if (enabled) {
+        sc_phoneview_ui_focus_video(screen->phoneview.ui);
+        SDL_RaiseWindow(screen->window);
+
+        (void) SDL_SetWindowMouseGrab(screen->window, true);
+        (void) SDL_CaptureMouse(true);
+        SDL_HideCursor();
+
+        if (!SDL_SetWindowRelativeMouseMode(screen->window, true)) {
+            SDL_ShowCursor();
+            SDL_CaptureMouse(false);
+            SDL_SetWindowMouseGrab(screen->window, false);
+            LOGW("Could not enable PhoneView relative mouse mode: %s",
+                 SDL_GetError());
+            return false;
+        }
+
+        screen->phoneview.mouse_look_relative_mode = true;
+        return true;
+    }
+
+    (void) SDL_SetWindowRelativeMouseMode(screen->window, false);
+    SDL_ShowCursor();
+    SDL_CaptureMouse(false);
+    SDL_SetWindowMouseGrab(screen->window, false);
+    screen->phoneview.mouse_look_relative_mode = false;
     return true;
 }
 
