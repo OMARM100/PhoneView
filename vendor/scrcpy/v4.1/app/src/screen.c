@@ -283,6 +283,183 @@ phoneview_toolbar_done_hit(float x, float y) {
     return phoneview_point_in_rect(x, y, 188.f, 11.f, 70.f, 32.f);
 }
 
+
+static struct sc_phoneview_control *
+phoneview_find_keyboard_control(struct sc_screen *screen, const char *label,
+                                size_t *index_out) {
+    for (size_t i = 0; i < screen->phoneview.count; ++i) {
+        struct sc_phoneview_control *control =
+            &screen->phoneview.controls[i];
+        if (!strcmp(control->type, "keyboard")
+                && !strcmp(control->label, label)) {
+            if (index_out) {
+                *index_out = i;
+            }
+            return control;
+        }
+    }
+    return NULL;
+}
+
+static struct sc_phoneview_control *
+phoneview_find_mouse_control(struct sc_screen *screen, const char *button,
+                             size_t *index_out) {
+    for (size_t i = 0; i < screen->phoneview.count; ++i) {
+        struct sc_phoneview_control *control =
+            &screen->phoneview.controls[i];
+        if (!strcmp(control->type, "mouse")
+                && !strcmp(control->mouse_button, button)) {
+            if (index_out) {
+                *index_out = i;
+            }
+            return control;
+        }
+    }
+    return NULL;
+}
+
+static bool
+phoneview_push_touch(struct sc_screen *screen,
+                      struct sc_phoneview_control *control,
+                      size_t index, enum android_motionevent_action action) {
+    if (!screen->controller || !screen->video || !screen->frame_size.width
+            || !screen->frame_size.height) {
+        return false;
+    }
+
+    struct sc_size window_size = sc_sdl_get_window_size(screen->window);
+    float wx = control->x * (float) window_size.width;
+    float wy = PHONEVIEW_TOOLBAR_H
+             + control->y
+               * ((float) window_size.height - PHONEVIEW_TOOLBAR_H);
+
+    struct sc_point point =
+        sc_screen_convert_window_to_frame_coords(screen, (int32_t) wx,
+                                                 (int32_t) wy);
+
+    struct sc_control_msg msg = {0};
+    msg.type = SC_CONTROL_MSG_TYPE_INJECT_TOUCH_EVENT;
+    msg.inject_touch_event.action = action;
+    msg.inject_touch_event.action_button = 0;
+    msg.inject_touch_event.buttons = 0;
+    msg.inject_touch_event.pointer_id = UINT64_C(0x100000) + index;
+    msg.inject_touch_event.position.screen_size = screen->frame_size;
+    msg.inject_touch_event.position.point = point;
+    msg.inject_touch_event.pressure =
+        action == AMOTION_EVENT_ACTION_UP ? 0.f : 1.f;
+
+    if (!sc_controller_push_msg(screen->controller, &msg)) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool
+phoneview_handle_mapped_keyboard(struct sc_screen *screen,
+                                  const SDL_KeyboardEvent *event) {
+    const char *name = SDL_GetKeyName(event->key);
+    if (!name || !name[0]) {
+        return false;
+    }
+
+    size_t index = 0;
+    struct sc_phoneview_control *control =
+        phoneview_find_keyboard_control(screen, name, &index);
+    if (!control) {
+        return false;
+    }
+
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+        if (control->active) {
+            return true;
+        }
+        if (phoneview_push_touch(screen, control, index,
+                                 AMOTION_EVENT_ACTION_DOWN)) {
+            control->active = true;
+        }
+    } else {
+        if (!control->active) {
+            return true;
+        }
+        phoneview_push_touch(screen, control, index,
+                             AMOTION_EVENT_ACTION_UP);
+        control->active = false;
+    }
+
+    return true;
+}
+
+static bool
+phoneview_handle_mapped_mouse(struct sc_screen *screen,
+                               const SDL_MouseButtonEvent *event) {
+    const char *name = NULL;
+    switch (event->button) {
+        case SDL_BUTTON_LEFT:   name = "left"; break;
+        case SDL_BUTTON_RIGHT:  name = "right"; break;
+        case SDL_BUTTON_MIDDLE: name = "middle"; break;
+        case SDL_BUTTON_X1:     name = "x1"; break;
+        case SDL_BUTTON_X2:     name = "x2"; break;
+        default: return false;
+    }
+
+    size_t index = 0;
+    struct sc_phoneview_control *control =
+        phoneview_find_mouse_control(screen, name, &index);
+    if (!control) {
+        return false;
+    }
+
+    if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+        if (!control->active) {
+            if (phoneview_push_touch(screen, control, index,
+                                     AMOTION_EVENT_ACTION_DOWN)) {
+                control->active = true;
+            }
+        }
+    } else {
+        if (control->active) {
+            phoneview_push_touch(screen, control, index,
+                                 AMOTION_EVENT_ACTION_UP);
+            control->active = false;
+        }
+    }
+
+    return true;
+}
+
+static bool
+phoneview_handle_mapped_wheel(struct sc_screen *screen,
+                               const SDL_MouseWheelEvent *event) {
+    const char *name = NULL;
+    if (event->y > 0.f) {
+        name = "wheel_up";
+    } else if (event->y < 0.f) {
+        name = "wheel_down";
+    } else if (event->x > 0.f) {
+        name = "wheel_right";
+    } else if (event->x < 0.f) {
+        name = "wheel_left";
+    }
+
+    if (!name) {
+        return false;
+    }
+
+    size_t index = 0;
+    struct sc_phoneview_control *control =
+        phoneview_find_mouse_control(screen, name, &index);
+    if (!control) {
+        return false;
+    }
+
+    (void) phoneview_push_touch(screen, control, index,
+                                AMOTION_EVENT_ACTION_DOWN);
+    (void) phoneview_push_touch(screen, control, index,
+                                AMOTION_EVENT_ACTION_UP);
+    return true;
+}
+
 static void
 phoneview_capture_keyboard(struct sc_screen *screen,
                            const SDL_KeyboardEvent *event) {
@@ -521,6 +698,30 @@ static bool
 phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
     if (!screen->phoneview.enabled) {
         return false;
+    }
+
+    if (!screen->phoneview.edit_mode) {
+        switch (event->type) {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP:
+                if (phoneview_handle_mapped_keyboard(screen, &event->key)) {
+                    return true;
+                }
+                break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP:
+                if (phoneview_handle_mapped_mouse(screen, &event->button)) {
+                    return true;
+                }
+                break;
+            case SDL_EVENT_MOUSE_WHEEL:
+                if (phoneview_handle_mapped_wheel(screen, &event->wheel)) {
+                    return true;
+                }
+                break;
+            default:
+                break;
+        }
     }
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
