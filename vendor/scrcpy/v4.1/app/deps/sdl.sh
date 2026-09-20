@@ -46,6 +46,11 @@ else
         conf+=(
             -DSDL_WAYLAND=ON
             -DSDL_X11=ON
+            # PhoneView uses scrcpy audio when a desktop audio backend is available.
+            # Build both PulseAudio and ALSA backends explicitly so SDL3 can
+            # initialize audio on older Linux desktop/server installations.
+            -DSDL_PULSEAUDIO=ON
+            -DSDL_ALSA=ON
             # XScreenSaver is optional for PhoneView/scrcpy and is not required
             # for the desktop presentation/control path.
             -DSDL_X11_XSCRNSAVER=OFF
