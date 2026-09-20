@@ -20,15 +20,16 @@ class DependencyChecker:
         "ninja-build",
         "gcc",
         "pkg-config",
-        "libsdl3-dev",
-        "libavcodec-dev",
-        "libavdevice-dev",
-        "libavformat-dev",
+        "make",
+        "cmake",
+        "wget",
+        "tar",
+        "perl",
+                "libavcodec-dev",
+                "libavformat-dev",
         "libavutil-dev",
         "libswresample-dev",
-        "libusb-1.0-0-dev",
-        "libv4l-dev",
-    )
+                    )
 
     def __init__(self):
         self.platform = sys.platform
@@ -125,7 +126,7 @@ class DependencyChecker:
         packages = [
             item["package"]
             for item in self.check()
-            if not item["ok"] and item.get("package")
+            if not item["ok"] and item.get("package") and item["package"] != "phoneview-scrcpy"
         ]
 
         if not self.scrcpy_ok():
