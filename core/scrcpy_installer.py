@@ -49,6 +49,11 @@ class ScrcpyInstaller:
         return None
 
     @staticmethod
+    def find_binary():
+        """Compatibility helper: only the pinned PhoneView engine is valid."""
+        return ScrcpyInstaller.local_binary()
+
+    @staticmethod
     def version(binary=None):
         binary = binary or ScrcpyInstaller.local_binary()
         if not binary:
