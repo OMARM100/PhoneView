@@ -1365,8 +1365,6 @@ sc_phoneview_ui_configure_new_control(
     GtkWidget *size_spin = NULL;
     GtkWidget *sensitivity_spin = NULL;
     GtkWidget *speed_spin = NULL;
-    GtkWidget *look_activation_combo = NULL;
-    GtkWidget *look_key_entry = NULL;
 
     int row = 1;
 
@@ -1432,7 +1430,6 @@ sc_phoneview_ui_configure_new_control(
             0);
         phoneview_dialog_update_look_activation(
             GTK_COMBO_BOX(look_activation_combo), look_inputs);
-    }
     } else if (add_type == SC_PHONEVIEW_ADD_WHEEL) {
         wheel_combo = phoneview_dialog_wheel_combo(
             control->mouse_button);
@@ -1650,6 +1647,8 @@ sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
     GtkWidget *left_entry = NULL;
     GtkWidget *down_entry = NULL;
     GtkWidget *right_entry = NULL;
+    GtkWidget *look_activation_combo = NULL;
+    GtkWidget *look_key_entry = NULL;
 
     if (!strcmp(control->type, "keyboard")) {
         key_entry = phoneview_dialog_key_entry(control->key);
