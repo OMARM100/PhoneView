@@ -980,11 +980,58 @@ phoneview_dialog_add_row(GtkGrid *grid,
     gtk_grid_attach(grid, value, 1, row, 2, 1);
 }
 
+static gboolean
+phoneview_dialog_key_press(GtkWidget *widget,
+                           GdkEventKey *event,
+                           gpointer userdata) {
+    (void) userdata;
+
+    const char *name = gdk_keyval_name(event->keyval);
+    if (!name || !name[0]) {
+        return TRUE;
+    }
+
+    char key[32];
+    snprintf(key, sizeof(key), "%s", name);
+
+    if (!strcmp(key, "space")) {
+        snprintf(key, sizeof(key), "Space");
+    } else if (!strcmp(key, "BackSpace")) {
+        snprintf(key, sizeof(key), "Backspace");
+    } else if (!strcmp(key, "Shift_L")) {
+        snprintf(key, sizeof(key), "Left Shift");
+    } else if (!strcmp(key, "Shift_R")) {
+        snprintf(key, sizeof(key), "Right Shift");
+    } else if (!strcmp(key, "Control_L")) {
+        snprintf(key, sizeof(key), "Left Ctrl");
+    } else if (!strcmp(key, "Control_R")) {
+        snprintf(key, sizeof(key), "Right Ctrl");
+    } else if (!strcmp(key, "Alt_L")) {
+        snprintf(key, sizeof(key), "Left Alt");
+    } else if (!strcmp(key, "Alt_R")) {
+        snprintf(key, sizeof(key), "Right Alt");
+    } else if (!strcmp(key, "Super_L")) {
+        snprintf(key, sizeof(key), "Left GUI");
+    } else if (!strcmp(key, "Super_R")) {
+        snprintf(key, sizeof(key), "Right GUI");
+    } else if (strlen(key) == 1 && g_ascii_isalpha((guchar) key[0])) {
+        key[0] = (char) g_ascii_toupper((guchar) key[0]);
+    }
+
+    gtk_entry_set_text(GTK_ENTRY(widget), key);
+    gtk_editable_set_position(GTK_EDITABLE(widget), -1);
+    return TRUE;
+}
+
 static GtkWidget *
 phoneview_dialog_entry(const char *value) {
     GtkWidget *entry = gtk_entry_new();
     gtk_entry_set_text(GTK_ENTRY(entry), value ? value : "");
     gtk_entry_set_width_chars(GTK_ENTRY(entry), 22);
+    g_signal_connect(entry,
+                     "key-press-event",
+                     G_CALLBACK(phoneview_dialog_key_press),
+                     NULL);
     return entry;
 }
 
