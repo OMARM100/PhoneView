@@ -327,7 +327,7 @@ class MainWindow(QMainWindow):
         stage_l.setContentsMargins(10, 10, 10, 10)
         stage_l.setSpacing(8)
 
-        # Mapping controls live directly over the external scrcpy window.
+        # Mapping controls are rendered directly by the patched scrcpy engine.
         self.mapping_workspace = QFrame()
         self.mapping_workspace.setObjectName("MirrorHost")
         workspace_l = QVBoxLayout(self.mapping_workspace)
@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
         workspace_title.setObjectName("Eyebrow")
         workspace_l.addWidget(workspace_title)
         self.mapping_status = QLabel(
-            "The mapping editor appears directly over the external Android window.\n\n"
+            "The mapping editor is rendered directly inside the patched scrcpy window.\n\n"
             "When scrcpy opens, use the ✎ Edit button shown inside the phone window."
         )
         self.mapping_status.setObjectName("StageHint")
@@ -609,7 +609,7 @@ class MainWindow(QMainWindow):
             self.stream_state.setObjectName("StatusGood")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected in a separate scrcpy window.")
-            self.write_log("✓ PhoneView mapping editor is ready.")
+            self.write_log("✓ Native PhoneView mapping editor is active inside scrcpy 4.1.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
         except Exception as exc:
             self.connected_serial = None
