@@ -23,7 +23,7 @@ CACHE_ROOT = (
     / PHONEVIEW_BUILD_NAME
 )
 SOURCE_CACHE_ROOT = CACHE_ROOT / "source"
-BUILD_CACHE_ROOT = CACHE_ROOT / "build"
+BUILD_CACHE_ROOT = CACHE_ROOT / "build-v2"
 SERVER_CACHE_ROOT = CACHE_ROOT / "server"
 
 SERVER_URL = (
@@ -210,6 +210,39 @@ class ScrcpyInstaller:
         launcher.chmod(0o755)
 
     @staticmethod
+    def _relocate_sdl_pkgconfig(cache_root):
+        pkg_dir = cache_root / "lib" / "pkgconfig"
+        if not pkg_dir.is_dir():
+            return
+
+        prefix = str(cache_root)
+        for pc_file in pkg_dir.glob("*.pc"):
+            try:
+                content = pc_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                continue
+
+            lines = []
+            changed = False
+            for line in content.splitlines():
+                if line.startswith("prefix="):
+                    line = "prefix=" + prefix
+                    changed = True
+                elif line.startswith("exec_prefix="):
+                    line = "exec_prefix=" + "$" + "{prefix}"
+                    changed = True
+                elif line.startswith("libdir="):
+                    line = "libdir=" + "$" + "{prefix}/lib"
+                    changed = True
+                elif line.startswith("includedir="):
+                    line = "includedir=" + "$" + "{prefix}/include"
+                    changed = True
+                lines.append(line)
+
+            if changed:
+                pc_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    @staticmethod
     def _prepare_local_sdl(source_root, env, emit):
         if ScrcpyInstaller._pkg_config_has_sdl3(env):
             emit("✓ SDL3 development files are already available.")
@@ -229,10 +262,11 @@ class ScrcpyInstaller:
         if (
             (pkgconfig / "sdl3.pc").is_file()
             and any(SDL_CACHE_ROOT.glob("lib/libSDL3.so*"))
-            and ScrcpyInstaller._pkg_config_has_sdl3(cached_env)
         ):
-            emit(f"✓ Cached SDL3 {SDL_CACHE_VERSION} is ready.")
-            return cached_env, SDL_CACHE_ROOT
+            ScrcpyInstaller._relocate_sdl_pkgconfig(SDL_CACHE_ROOT)
+            if ScrcpyInstaller._pkg_config_has_sdl3(cached_env):
+                emit(f"✓ Cached SDL3 {SDL_CACHE_VERSION} is ready.")
+                return cached_env, SDL_CACHE_ROOT
 
         emit("↓ System SDL3 development files are unavailable.")
         emit(
@@ -269,6 +303,7 @@ class ScrcpyInstaller:
             shutil.rmtree(SDL_CACHE_ROOT)
         SDL_CACHE_ROOT.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(local_install, SDL_CACHE_ROOT)
+        ScrcpyInstaller._relocate_sdl_pkgconfig(SDL_CACHE_ROOT)
 
         cached_env = env.copy()
         old_pkg = cached_env.get("PKG_CONFIG_PATH", "")
