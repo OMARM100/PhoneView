@@ -25,42 +25,117 @@ from core.dependency_checker import DependencyChecker
 
 
 PHONEVIEW_QSS = """
-QDialog { background: #0B0D10; color: #E8EDF5; font-family: "DejaVu Sans", "Noto Sans", sans-serif; }
-QLabel { color: #E8EDF5; background: transparent; }
-QLabel#Eyebrow { color: #6E9BFF; font-size: 9px; font-weight: 800; }
-QLabel#Subtitle, QLabel#Muted { color: #7F8998; font-size: 10px; }
-QLabel#SectionTitle { color: #DCE3ED; font-size: 10px; font-weight: 800; }
-QLabel#StatusTitle { color: #F4F7FB; font-size: 17px; font-weight: 800; }
-QLabel#StatusDetail { color: #8994A5; font-size: 10px; }
-QLabel#Percent { color: #6E9BFF; font-size: 18px; font-weight: 800; }
-QLabel#SectionMeta { color: #667181; font-size: 9px; }
-QFrame#TopLine { background: #397BFF; border-radius: 2px; }
-QFrame#StatusCard { background: #13171D; border: 1px solid #222A34; border-radius: 18px; }
-QFrame#StatusGlow { background: #13264A; border: none; border-radius: 9px; }
-QFrame#Card { background: #11151A; border: 1px solid #202832; border-radius: 16px; }
-QFrame#DependencyRow { background: #151A20; border: 1px solid #222A34; border-radius: 11px; }
-QFrame#DependencyRow:hover { background: #181F27; border-color: #2C3745; }
-QLabel#DependencyName { color: #DCE3ED; font-size: 10px; font-weight: 700; }
-QLabel#DependencyState { color: #7F8998; font-size: 9px; font-weight: 800; }
-QLabel#StatusIcon { color: #7F8998; font-size: 10px; font-weight: 800; }
-QProgressBar { background: #202731; border: none; border-radius: 4px; min-height: 7px; max-height: 7px; }
-QProgressBar::chunk { background: #397BFF; border-radius: 4px; }
+QDialog { 
+    background-color: #0B0F19; 
+    color: #F1F5F9; 
+    font-family: "Segoe UI", "DejaVu Sans", "Noto Sans", sans-serif; 
+}
+QLabel { color: #F1F5F9; background: transparent; }
+QLabel#Eyebrow { color: #3B82F6; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+QLabel#Subtitle, QLabel#Muted { color: #94A3B8; font-size: 11px; }
+QLabel#SectionTitle { color: #E2E8F0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+QLabel#StatusTitle { color: #FFFFFF; font-size: 19px; font-weight: 900; }
+QLabel#StatusDetail { color: #94A3B8; font-size: 11px; line-height: 1.4; }
+QLabel#Percent { color: #3B82F6; font-size: 22px; font-weight: 900; }
+QLabel#SectionMeta { color: #64748B; font-size: 10px; font-weight: bold; }
+
+QFrame#TopLine { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #60A5FA); 
+    border-radius: 2px; 
+}
+QFrame#StatusCard { 
+    background-color: #111827; 
+    border: 1px solid #1F2937; 
+    border-radius: 16px; 
+}
+QFrame#StatusGlow { 
+    background-color: rgba(59, 130, 246, 0.12); 
+    border: 1px solid rgba(59, 130, 246, 0.2); 
+    border-radius: 21px; 
+}
+QFrame#Card { 
+    background-color: #111827; 
+    border: 1px solid #1F2937; 
+    border-radius: 16px; 
+}
+QFrame#DependencyRow { 
+    background-color: #1F2937; 
+    border: 1px solid #374151; 
+    border-radius: 10px; 
+}
+QFrame#DependencyRow\:hover { 
+    background-color: #273345; 
+    border-color: #4B5563; 
+}
+
+QLabel#DependencyName { color: #F8FAFC; font-size: 11px; font-weight: 700; }
+QLabel#DependencyState { color: #94A3B8; font-size: 10px; font-weight: 800; }
+QLabel#StatusIcon { font-size: 12px; font-weight: 900; }
+
+QProgressBar { 
+    background-color: #1F2937; 
+    border: none; 
+    border-radius: 4px; 
+    min-height: 8px; 
+    max-height: 8px; 
+}
+QProgressBar::chunk { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
+    border-radius: 4px; 
+}
+
 QScrollArea { background: transparent; border: none; }
-QScrollBar:vertical { background: transparent; width: 5px; margin: 2px 0; }
-QScrollBar::handle:vertical { background: #303A47; min-height: 22px; border-radius: 2px; }
-QScrollBar::handle:vertical:hover { background: #465365; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QTextEdit#ActivityLog { background: #090C0F; color: #98A5B6; border: 1px solid #202832; border-radius: 13px; padding: 10px; font-family: "DejaVu Sans Mono", "Noto Sans Mono", monospace; font-size: 9px; selection-background-color: #245FCA; selection-color: #FFFFFF; }
-QPushButton { min-height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid #2A333F; background: #171C22; color: #C8D0DB; font-size: 9px; font-weight: 800; }
-QPushButton:hover { background: #202731; border-color: #384454; color: #F0F4F8; }
-QPushButton:pressed { background: #11151A; }
-QPushButton:disabled { background: #14181D; border-color: #1D242D; color: #4F5967; }
-QPushButton#Primary { background: #2D6BEF; border-color: #2D6BEF; color: #FFFFFF; min-width: 138px; }
-QPushButton#Primary:hover { background: #4380FF; border-color: #4380FF; }
-QPushButton#Primary:pressed { background: #2459C7; }
-QPushButton#Primary:disabled { background: #172C50; border-color: #172C50; color: #526B91; }
-QPushButton#Quiet { background: transparent; border-color: transparent; color: #7E8999; }
-QPushButton#Quiet:hover { background: #171C22; border-color: #252E39; color: #D4DCE7; }
+QScrollBar\:vertical { background: transparent; width: 6px; margin: 2px 0; }
+QScrollBar::handle\:vertical { background: #374151; min-height: 24px; border-radius: 3px; }
+QScrollBar::handle\:vertical\:hover { background: #4B5563; }
+QScrollBar::add-line\:vertical, QScrollBar::sub-line\:vertical { height: 0; }
+
+QTextEdit#ActivityLog { 
+    background-color: #05080F; 
+    color: #9CA3AF; 
+    border: 1px solid #1F2937; 
+    border-radius: 12px; 
+    padding: 12px; 
+    font-family: "Consolas", "DejaVu Sans Mono", monospace; 
+    font-size: 11px; 
+    selection-background-color: #3B82F6; 
+    selection-color: #FFFFFF; 
+}
+
+QPushButton { 
+    min-height: 36px; 
+    padding: 0 16px; 
+    border-radius: 8px; 
+    border: 1px solid #374151; 
+    background-color: #1F2937; 
+    color: #E2E8F0; 
+    font-size: 11px; 
+    font-weight: 800; 
+}
+QPushButton\:hover { background-color: #374151; border-color: #4B5563; color: #FFFFFF; }
+QPushButton\:pressed { background-color: #111827; }
+QPushButton\:disabled { background-color: #111827; border-color: #1F2937; color: #4B5563; }
+
+QPushButton#Primary { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
+    border: none; 
+    color: #FFFFFF; 
+    min-width: 140px; 
+}
+QPushButton#Primary\:hover { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #60A5FA); 
+}
+QPushButton#Primary\:pressed { 
+    background-color: #1D4ED8; 
+    background: none; 
+}
+QPushButton#Primary\:disabled { 
+    background: #1E3A8A; 
+    color: #60A5FA; 
+}
+
+QPushButton#Quiet { background: transparent; border-color: transparent; color: #94A3B8; }
+QPushButton#Quiet\:hover { background-color: #1F2937; border-color: #374151; color: #F1F5F9; }
 """
 
 
