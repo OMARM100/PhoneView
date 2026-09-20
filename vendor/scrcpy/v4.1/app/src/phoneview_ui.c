@@ -247,6 +247,9 @@ sc_phoneview_ui_show(struct sc_phoneview_ui *ui) {
 
     gtk_widget_show(ui->window);
     gtk_window_present(GTK_WINDOW(ui->window));
+    while (gtk_events_pending()) {
+        gtk_main_iteration_do(FALSE);
+    }
     gtk_widget_grab_focus(ui->video_area);
 }
 
