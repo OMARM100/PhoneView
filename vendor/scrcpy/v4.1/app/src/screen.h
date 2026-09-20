@@ -36,6 +36,7 @@ struct sc_phoneview_control {
     char mouse_button[16];
     float x;
     float y;
+    bool active;
 };
 
 struct sc_phoneview_state {
