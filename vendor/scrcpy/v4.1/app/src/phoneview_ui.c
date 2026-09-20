@@ -1186,6 +1186,15 @@ sc_phoneview_ui_set_edit_mode(struct sc_phoneview_ui *ui,
 }
 
 void
+sc_phoneview_ui_focus_video(struct sc_phoneview_ui *ui) {
+    if (!ui || !ui->video_xid || !ui->window) {
+        return;
+    }
+
+    phoneview_ui_focus_video(ui);
+}
+
+void
 sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
                                  bool capture_mode) {
     if (!ui) {
@@ -1341,6 +1350,11 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
                                  bool capture_mode) {
     (void) ui;
     (void) capture_mode;
+}
+
+void
+sc_phoneview_ui_focus_video(struct sc_phoneview_ui *ui) {
+    (void) ui;
 }
 
 int
