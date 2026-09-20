@@ -675,10 +675,6 @@ class MainWindow(QMainWindow):
 
     def check_stream(self):
         if self.connected_serial and not self.scrcpy.running():
-            # Keep the connection alive while the native scrcpy window is still present.
-            if self.scrcpy.window_exists(self.project_name):
-                return
-
             self.scrcpy.read_output()
             self.write_log("✗ scrcpy screen window closed or stopped.")
             if self.scrcpy.last_output:
