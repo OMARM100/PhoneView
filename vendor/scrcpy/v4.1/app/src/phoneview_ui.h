@@ -85,6 +85,10 @@ void
 sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
                                  bool capture_mode);
 
+void
+sc_phoneview_ui_focus_video(struct sc_phoneview_ui *ui);
+
+
 int
 sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui);
 
