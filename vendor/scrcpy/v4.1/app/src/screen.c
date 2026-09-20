@@ -1368,8 +1368,6 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             screen->phoneview.resizing = false;
             screen->phoneview.drag_index = -1;
             screen->phoneview.resize_index = -1;
-            screen->phoneview.resize_start_size = 1.f;
-            screen->phoneview.resize_start_distance = 0.f;
             screen->phoneview.selected_index = -1;
             screen->phoneview.last_click_index = -1;
             screen->phoneview.last_click_time = 0;
@@ -1532,7 +1530,9 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
             screen->phoneview.capture_stage = 0;
             screen->phoneview.edit_mode = false;
             screen->phoneview.dragging = false;
+            screen->phoneview.resizing = false;
             screen->phoneview.drag_index = -1;
+            screen->phoneview.resize_index = -1;
             screen->phoneview.selected_index = -1;
 
             phoneview_save_controls(screen);
@@ -1748,12 +1748,6 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                         screen->phoneview.resize_index = index;
                         screen->phoneview.dragging = false;
                         screen->phoneview.drag_index = -1;
-                        screen->phoneview.resize_start_size = scale;
-
-                        float dx = local_x - cx;
-                        float dy = local_y - cy;
-                        screen->phoneview.resize_start_distance =
-                            SDL_sqrtf(dx * dx + dy * dy);
                         return true;
                     }
                 }
