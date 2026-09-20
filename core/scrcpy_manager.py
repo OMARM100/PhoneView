@@ -148,7 +148,7 @@ class ScrcpyManager:
         if not self.scrcpy:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
-        env = os.environ.copy()
+        env = ScrcpyInstaller.runtime_environment()
         env["PHONEVIEW_MAPPING"] = "1"
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
             raise RuntimeError(
