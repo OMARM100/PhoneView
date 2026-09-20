@@ -261,7 +261,6 @@
     color: #858585;
     min-width: 180px;
     font-size: 11px;
-    text-overflow: ellipsis;
     font-weight: 500;
     padding: 0 12px;
 }
@@ -318,10 +317,6 @@
 #phoneview-toolbar #phoneview-duplicate-button { min-width: 102px; }
 #phoneview-toolbar #phoneview-delete-button { min-width: 80px; }
 #phoneview-toolbar #phoneview-done-button { min-width: 76px; }
-
-#phoneview-toolbar button label {
-    -gtk-icon-transform: none;
-}
 
 #phoneview-toolbar #phoneview-add-button {
     padding-left: 9px;
