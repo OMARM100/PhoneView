@@ -9,6 +9,7 @@
 
 #include <gtk/gtk.h>
 #include <gdk/gdkx.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 
@@ -265,17 +266,21 @@ phoneview_ui_sync_video_size(struct sc_phoneview_ui *ui) {
     }
 
     GdkWindow *window = ui->video_gdk_window;
-    gint current_width = 0;
-    gint current_height = 0;
 
-    gdk_window_get_geometry(window,
-                            NULL,
-                            NULL,
-                            &current_width,
-                            &current_height);
+    gdk_window_move_resize(window, 0, 0, width, height);
 
-    if (current_width != width || current_height != height) {
-        gdk_window_move_resize(window, 0, 0, width, height);
+    GdkDisplay *display = gdk_window_get_display(window);
+    if (GDK_IS_X11_DISPLAY(display)) {
+        Display *xdisplay = gdk_x11_display_get_xdisplay(display);
+        Window xid = gdk_x11_window_get_xid(window);
+
+        XMoveResizeWindow(xdisplay,
+                          xid,
+                          0,
+                          0,
+                          (unsigned) width,
+                          (unsigned) height);
+        XFlush(xdisplay);
     }
 
     if (ui->video_window) {
@@ -384,21 +389,54 @@ phoneview_ui_apply_assets(struct sc_phoneview_ui *ui) {
         gtk_window_set_icon_from_file(GTK_WINDOW(ui->window),
                                       icon_path,
                                       NULL);
-        gtk_image_set_from_file(GTK_IMAGE(ui->title_icon), icon_path);
-        gtk_image_set_pixel_size(GTK_IMAGE(ui->title_icon), 20);
+
+        GError *icon_error = NULL;
+        GdkPixbuf *pixbuf =
+            gdk_pixbuf_new_from_file_at_scale(icon_path,
+                                              20,
+                                              20,
+                                              TRUE,
+                                              &icon_error);
+        if (pixbuf) {
+            gtk_image_set_from_pixbuf(GTK_IMAGE(ui->title_icon), pixbuf);
+            g_object_unref(pixbuf);
+        } else {
+            LOGW("PhoneView UI: could not scale icon: %s",
+                 icon_error ? icon_error->message : "unknown error");
+            if (icon_error) {
+                g_error_free(icon_error);
+            }
+        }
+
         gtk_widget_set_size_request(ui->title_icon, 20, 20);
+        gtk_widget_set_halign(ui->title_icon, GTK_ALIGN_CENTER);
+        gtk_widget_set_valign(ui->title_icon, GTK_ALIGN_CENTER);
     } else {
         LOGW("PhoneView UI: custom icon was not found");
     }
 
     char css_path[PATH_MAX];
-    if (!phoneview_ui_asset_path("phoneview",
-                                 "phoneview.css",
-                                 css_path,
-                                 sizeof(css_path))) {
-        LOGE("PhoneView UI: could not resolve phoneview.css");
+    bool css_found =
+        phoneview_ui_asset_path("phoneview",
+                                "phoneview.css",
+                                css_path,
+                                sizeof(css_path));
+
+    if (!css_found || access(css_path, R_OK) != 0) {
+        css_found =
+            phoneview_ui_asset_path(
+                "icons/hicolor/scalable/apps",
+                "phoneview.css",
+                css_path,
+                sizeof(css_path));
+    }
+
+    if (!css_found || access(css_path, R_OK) != 0) {
+        LOGE("PhoneView UI: phoneview.css was not found");
         return;
     }
+
+    LOGI("PhoneView UI: loading theme: %s", css_path);
 
     GtkCssProvider *provider = gtk_css_provider_new();
     GError *error = NULL;
@@ -611,6 +649,12 @@ sc_phoneview_ui_create(const char *title,
     gtk_widget_set_hexpand(ui->video_area, TRUE);
     gtk_widget_set_vexpand(ui->video_area, TRUE);
     gtk_widget_set_can_focus(ui->video_area, TRUE);
+    gtk_widget_set_hexpand(ui->video_area, TRUE);
+    gtk_widget_set_vexpand(ui->video_area, TRUE);
+    gtk_widget_set_margin_start(ui->video_area, 0);
+    gtk_widget_set_margin_end(ui->video_area, 0);
+    gtk_widget_set_margin_top(ui->video_area, 0);
+    gtk_widget_set_margin_bottom(ui->video_area, 0);
     gtk_widget_set_size_request(ui->video_area,
                                 PHONEVIEW_UI_MIN_VIDEO_WIDTH,
                                 PHONEVIEW_UI_MIN_VIDEO_HEIGHT);
