@@ -149,6 +149,13 @@ class ScrcpyManager:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
         env = ScrcpyInstaller.runtime_environment()
+        # Always inject the bundled SDL3 directory explicitly for the child
+        # process. This also protects against launchers/symlinks started
+        # outside PhoneView's Python environment.
+        lib_dir = ScrcpyInstaller.runtime_library_dir()
+        if lib_dir:
+            old_ld = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{old_ld}" if old_ld else lib_dir
         env["PHONEVIEW_MAPPING"] = "1"
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
             raise RuntimeError(
