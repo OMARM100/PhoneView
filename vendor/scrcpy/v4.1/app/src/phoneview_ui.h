@@ -40,6 +40,8 @@ struct sc_phoneview_control_edit {
     char left_key[32];
     char down_key[32];
     char right_key[32];
+    float size;
+    float sensitivity;
 };
 
 struct sc_phoneview_ui;
