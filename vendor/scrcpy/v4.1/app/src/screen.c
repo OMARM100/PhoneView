@@ -1202,7 +1202,7 @@ phoneview_render_controls(struct sc_screen *screen) {
             phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
-                PHONEVIEW_JOYSTICK_RADIUS,
+                PHONEVIEW_JOYSTICK_RADIUS * control_scale,
                 92, 140, 205,
                 editing ? (selected ? 245 : 210)
                         : (pressed ? 200 : 150));
@@ -1249,14 +1249,30 @@ phoneview_render_controls(struct sc_screen *screen) {
                 editing ? (selected ? 245 : 220)
                         : (pressed ? 245 : 190));
 
-            phoneview_draw_text(screen->renderer, cx - 4.f, cy - 36.f,
-                                "W");
-            phoneview_draw_text(screen->renderer, cx - 4.f, cy + 28.f,
-                                "S");
-            phoneview_draw_text(screen->renderer, cx - 30.f, cy - 4.f,
-                                "A");
-            phoneview_draw_text(screen->renderer, cx + 24.f, cy - 4.f,
-                                "D");
+            float text_offset_y = 36.f * control_scale;
+            float text_offset_x = 30.f * control_scale;
+
+            phoneview_draw_text(screen->renderer, cx - 4.f,
+                                cy - text_offset_y, "W");
+            phoneview_draw_text(screen->renderer, cx - 4.f,
+                                cy + 28.f * control_scale, "S");
+            phoneview_draw_text(screen->renderer, cx - text_offset_x,
+                                cy - 4.f, "A");
+            phoneview_draw_text(screen->renderer, cx + 24.f * control_scale,
+                                cy - 4.f, "D");
+
+            if (editing && selected) {
+                const float handle = 10.f;
+                float hx = cx + PHONEVIEW_JOYSTICK_RADIUS * control_scale;
+                float hy = cy + PHONEVIEW_JOYSTICK_RADIUS * control_scale;
+                SDL_SetRenderDrawColor(
+                    screen->renderer, 255, 255, 255, 235);
+                SDL_FRect resize_handle = {
+                    hx - handle / 2.f, hy - handle / 2.f,
+                    handle, handle,
+                };
+                SDL_RenderFillRect(screen->renderer, &resize_handle);
+            }
             continue;
         }
 
@@ -1338,6 +1354,12 @@ phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
     switch (action) {
         case SC_PHONEVIEW_UI_ACTION_EDIT:
             phoneview_load_controls(screen);
+            for (size_t i = 0; i < screen->phoneview.count; ++i) {
+                phoneview_clamp_control_position(
+                    &screen->phoneview.controls[i],
+                    screen->rect.w,
+                    screen->rect.h);
+            }
             screen->phoneview.edit_mode = true;
             screen->phoneview.capture_mode = false;
             screen->phoneview.capture_stage = 0;
