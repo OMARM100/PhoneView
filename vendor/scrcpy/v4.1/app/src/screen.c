@@ -643,6 +643,9 @@ phoneview_render_controls(struct sc_screen *screen) {
     }
 }
 
+static struct sc_size
+phoneview_get_render_size(struct sc_screen *screen);
+
 static void
 phoneview_ui_action_cb(enum sc_phoneview_ui_action action, void *userdata) {
     struct sc_screen *screen = userdata;
