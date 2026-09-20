@@ -146,6 +146,28 @@
     background-color: #26282d;
 }
 
+#phoneview-toolbar #phoneview-edit-button.active {
+    color: #ffffff;
+    background-color: #244f87;
+    border-color: #3a7ac7;
+}
+
+#phoneview-toolbar #phoneview-edit-button.active:hover {
+    background-color: #2b63aa;
+}
+
+#phoneview-toolbar button:disabled {
+    color: #666b73;
+    background-color: #202124;
+    border-color: #303238;
+    opacity: 1;
+}
+
+#phoneview-toolbar button:disabled image {
+    opacity: 0.45;
+}
+
+
 /* --------------------------------------------------------------------------
    Add Button - primary action
    -------------------------------------------------------------------------- */
