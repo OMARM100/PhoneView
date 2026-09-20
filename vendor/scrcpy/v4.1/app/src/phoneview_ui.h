@@ -93,7 +93,8 @@ sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
                                     const char *status);
 
 bool
-sc_phoneview_ui_edit_control(struct sc_phoneview_control_edit *control);
+sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
+                             struct sc_phoneview_control_edit *control);
 
 bool
 sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
