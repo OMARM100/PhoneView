@@ -133,6 +133,24 @@ class ScrcpyInstaller:
         return env
 
     @staticmethod
+    def _install_launcher(target_binary):
+        """Install a portable launcher that exposes the bundled SDL3 runtime."""
+        BIN_ROOT.mkdir(parents=True, exist_ok=True)
+        launcher = BIN_ROOT / "scrcpy-phoneview"
+        if launcher.is_symlink() or launcher.exists():
+            launcher.unlink()
+
+        lib_dir = ScrcpyInstaller.target_root() / "lib"
+        launcher.write_text(
+            "#!/bin/sh\n"
+            'SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\n'
+            f'export LD_LIBRARY_PATH="{lib_dir}:$LD_LIBRARY_PATH"\n'
+            f'exec "{target_binary}" "$@"\n',
+            encoding="utf-8",
+        )
+        launcher.chmod(0o755)
+
+    @staticmethod
     def _prepare_local_sdl(source_root, env, emit):
         if ScrcpyInstaller._pkg_config_has_sdl3(env):
             emit("✓ SDL3 development files are already available.")
@@ -215,11 +233,7 @@ class ScrcpyInstaller:
             and target_server.is_file()
             and target_server.stat().st_size > 0
         ):
-            BIN_ROOT.mkdir(parents=True, exist_ok=True)
-            link = BIN_ROOT / "scrcpy-phoneview"
-            if link.is_symlink() or link.exists():
-                link.unlink()
-            link.symlink_to(target_binary)
+            ScrcpyInstaller._install_launcher(target_binary)
             emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} is already installed.")
             set_progress(100)
             return str(target_binary)
@@ -320,10 +334,7 @@ class ScrcpyInstaller:
             target_binary.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
         )
 
-        link = BIN_ROOT / "scrcpy-phoneview"
-        if link.is_symlink() or link.exists():
-            link.unlink()
-        link.symlink_to(target_binary)
+        ScrcpyInstaller._install_launcher(target_binary)
 
         emit(f"✓ PhoneView scrcpy {PHONEVIEW_BUILD_NAME} installed.")
         emit("✓ Future upstream scrcpy releases will NOT replace this build.")
