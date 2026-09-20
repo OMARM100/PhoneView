@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
 
             self.connected_serial = serial
             self.progress.setVisible(False)
-            self.stream_state.setText("●  SCREEN LIVE • SEPARATE WINDOW")
+            self.stream_state.setText("●  SCREEN LIVE • EMBEDDED")
             self.stream_state.setObjectName("StatusGood")
             self.header_state.setText("●  CONNECTED")
             self.write_log("✓ Android screen connected inside PhoneView.")
