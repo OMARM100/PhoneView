@@ -25,42 +25,172 @@ from core.dependency_checker import DependencyChecker
 
 
 PHONEVIEW_QSS = """
-QDialog { background: #0B0D10; color: #E8EDF5; font-family: "DejaVu Sans", "Noto Sans", sans-serif; }
-QLabel { color: #E8EDF5; background: transparent; }
-QLabel#Eyebrow { color: #6E9BFF; font-size: 9px; font-weight: 800; }
-QLabel#Subtitle, QLabel#Muted { color: #7F8998; font-size: 10px; }
-QLabel#SectionTitle { color: #DCE3ED; font-size: 10px; font-weight: 800; }
-QLabel#StatusTitle { color: #F4F7FB; font-size: 17px; font-weight: 800; }
-QLabel#StatusDetail { color: #8994A5; font-size: 10px; }
-QLabel#Percent { color: #6E9BFF; font-size: 18px; font-weight: 800; }
-QLabel#SectionMeta { color: #667181; font-size: 9px; }
-QFrame#TopLine { background: #397BFF; border-radius: 2px; }
-QFrame#StatusCard { background: #13171D; border: 1px solid #222A34; border-radius: 18px; }
-QFrame#StatusGlow { background: #13264A; border: none; border-radius: 9px; }
-QFrame#Card { background: #11151A; border: 1px solid #202832; border-radius: 16px; }
-QFrame#DependencyRow { background: #151A20; border: 1px solid #222A34; border-radius: 11px; }
-QFrame#DependencyRow:hover { background: #181F27; border-color: #2C3745; }
-QLabel#DependencyName { color: #DCE3ED; font-size: 10px; font-weight: 700; }
-QLabel#DependencyState { color: #7F8998; font-size: 9px; font-weight: 800; }
-QLabel#StatusIcon { color: #7F8998; font-size: 10px; font-weight: 800; }
-QProgressBar { background: #202731; border: none; border-radius: 4px; min-height: 7px; max-height: 7px; }
-QProgressBar::chunk { background: #397BFF; border-radius: 4px; }
+QDialog { 
+    background-color: #0B0F19; 
+    color: #F1F5F9; 
+    font-family: "Segoe UI", "DejaVu Sans", "Noto Sans", sans-serif; 
+}
+QLabel { color: #F1F5F9; background: transparent; }
+QLabel#Eyebrow { color: #3B82F6; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+QLabel#Subtitle, QLabel#Muted { color: #94A3B8; font-size: 11px; }
+QLabel#SectionTitle { color: #E2E8F0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+QLabel#StatusTitle { color: #FFFFFF; font-size: 19px; font-weight: 900; }
+QLabel#StatusDetail { color: #94A3B8; font-size: 11px; line-height: 1.4; }
+QLabel#Percent { color: #3B82F6; font-size: 22px; font-weight: 900; }
+QLabel#SectionMeta { color: #64748B; font-size: 10px; font-weight: bold; }
+
+QFrame#TopLine { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #60A5FA); 
+    border-radius: 2px; 
+}
+QFrame#StatusCard { 
+    background-color: #111827; 
+    border: 1px solid #1F2937; 
+    border-radius: 16px; 
+}
+QFrame#StatusGlow { 
+    background-color: rgba(59, 130, 246, 0.12); 
+    border: 1px solid rgba(59, 130, 246, 0.2); 
+    border-radius: 21px; 
+}
+QFrame#Card { 
+    background-color: #111827; 
+    border: 1px solid #1F2937; 
+    border-radius: 16px; 
+}
+QFrame#DependencyRow { 
+    background-color: #1F2937; 
+    border: 1px solid #374151; 
+    border-radius: 10px; 
+}
+QFrame#DependencyRow:hover { 
+    background-color: #273345; 
+    border-color: #4B5563; 
+}
+
+QLabel#DependencyName { color: #F8FAFC; font-size: 11px; font-weight: 700; }
+QLabel#DependencyState { color: #94A3B8; font-size: 10px; font-weight: 800; }
+QLabel#StatusIcon { font-size: 12px; font-weight: 900; }
+
+QProgressBar { 
+    background-color: #1F2937; 
+    border: none; 
+    border-radius: 4px; 
+    min-height: 8px; 
+    max-height: 8px; 
+}
+QProgressBar::chunk { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
+    border-radius: 4px; 
+}
+
 QScrollArea { background: transparent; border: none; }
-QScrollBar:vertical { background: transparent; width: 5px; margin: 2px 0; }
-QScrollBar::handle:vertical { background: #303A47; min-height: 22px; border-radius: 2px; }
-QScrollBar::handle:vertical:hover { background: #465365; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QTextEdit#ActivityLog { background: #090C0F; color: #98A5B6; border: 1px solid #202832; border-radius: 13px; padding: 10px; font-family: "DejaVu Sans Mono", "Noto Sans Mono", monospace; font-size: 9px; selection-background-color: #245FCA; selection-color: #FFFFFF; }
-QPushButton { min-height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid #2A333F; background: #171C22; color: #C8D0DB; font-size: 9px; font-weight: 800; }
-QPushButton:hover { background: #202731; border-color: #384454; color: #F0F4F8; }
-QPushButton:pressed { background: #11151A; }
-QPushButton:disabled { background: #14181D; border-color: #1D242D; color: #4F5967; }
-QPushButton#Primary { background: #2D6BEF; border-color: #2D6BEF; color: #FFFFFF; min-width: 138px; }
-QPushButton#Primary:hover { background: #4380FF; border-color: #4380FF; }
-QPushButton#Primary:pressed { background: #2459C7; }
-QPushButton#Primary:disabled { background: #172C50; border-color: #172C50; color: #526B91; }
-QPushButton#Quiet { background: transparent; border-color: transparent; color: #7E8999; }
-QPushButton#Quiet:hover { background: #171C22; border-color: #252E39; color: #D4DCE7; }
+QScrollBar:vertical {
+    background: #0F172A;
+    width: 8px;
+    margin: 2px 0;
+    border: none;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #334155;
+    min-height: 28px;
+    border-radius: 4px;
+    border: 1px solid #475569;
+}
+QScrollBar::handle:vertical:hover {
+    background: #475569;
+    border-color: #64748B;
+}
+QScrollBar::handle:vertical:pressed {
+    background: #3B82F6;
+    border-color: #60A5FA;
+}
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #0F172A;
+    height: 8px;
+    margin: 0 2px;
+    border: none;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal {
+    background: #334155;
+    min-width: 28px;
+    border-radius: 4px;
+    border: 1px solid #475569;
+}
+QScrollBar::handle:horizontal:hover {
+    background: #475569;
+    border-color: #64748B;
+}
+QScrollBar::handle:horizontal:pressed {
+    background: #3B82F6;
+    border-color: #60A5FA;
+}
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+QTextEdit#ActivityLog { 
+    background-color: #05080F; 
+    color: #9CA3AF; 
+    border: 1px solid #1F2937; 
+    border-radius: 12px; 
+    padding: 12px; 
+    font-family: "Consolas", "DejaVu Sans Mono", monospace; 
+    font-size: 11px; 
+    selection-background-color: #3B82F6; 
+    selection-color: #FFFFFF; 
+}
+
+QPushButton { 
+    min-height: 36px; 
+    padding: 0 16px; 
+    border-radius: 8px; 
+    border: 1px solid #374151; 
+    background-color: #1F2937; 
+    color: #E2E8F0; 
+    font-size: 11px; 
+    font-weight: 800; 
+}
+QPushButton:hover { background-color: #374151; border-color: #4B5563; color: #FFFFFF; }
+QPushButton:pressed { background-color: #111827; }
+QPushButton:disabled { background-color: #111827; border-color: #1F2937; color: #4B5563; }
+
+QPushButton#Primary { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #2563EB, stop:1 #3B82F6); 
+    border: none; 
+    color: #FFFFFF; 
+    min-width: 140px; 
+}
+QPushButton#Primary:hover { 
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3B82F6, stop:1 #60A5FA); 
+}
+QPushButton#Primary:pressed { 
+    background-color: #1D4ED8; 
+    background: none; 
+}
+QPushButton#Primary:disabled { 
+    background: #1E3A8A; 
+    color: #60A5FA; 
+}
+
+QPushButton#Quiet { background: transparent; border-color: transparent; color: #94A3B8; }
+QPushButton#Quiet:hover { background-color: #1F2937; border-color: #374151; color: #F1F5F9; }
 """
 
 
@@ -85,6 +215,7 @@ class SetupWindow(QDialog):
         self.package_progress = {}
         self.rows = {}
         self.install_timer = None
+        self.pending_scrcpy_build = False
 
         self.build_ui()
         QTimer.singleShot(250, self.run_check)
@@ -343,9 +474,8 @@ class SetupWindow(QDialog):
         ):
             self.status.setText("Preparing automatic installation")
             self.detail.setText(
-                "PhoneView will install the official stable scrcpy release directly "
-                "from the official project when scrcpy is missing or obsolete. "
-                "System packages, when needed, use the normal operating-system authorization dialog."
+                "PhoneView installs the required system packages, then builds its pinned "
+                "scrcpy 4.1 engine with the integrated mapping editor."
             )
             self.set_progress(15, f"Preparing automatic installation of {len(missing)} component(s)...")
             self.install_timer = QTimer(self)
@@ -365,63 +495,55 @@ class SetupWindow(QDialog):
             return
 
         packages = self.checker.missing_linux_packages()
+        self.pending_scrcpy_build = not self.checker.scrcpy_ok()
+
+        # The checker intentionally does not expose the pseudo-package
+        # "phoneview-scrcpy" in the APT package list. Build state must therefore
+        # be derived from the actual PhoneView engine check, otherwise setup can
+        # finish installing system packages and immediately loop forever.
         if not packages:
-            self.run_check()
+            if self.pending_scrcpy_build:
+                self.start_scrcpy_build()
+            else:
+                self.run_check()
             return
 
-        # scrcpy is deliberately installed outside apt. Ubuntu/Debian repositories
-        # may ship an obsolete release, so PhoneView uses the official stable archive.
-        if "scrcpy" in packages:
-            self.installing = True
-            self.cancelling = False
-            self.current_packages = packages
-            self.package_progress = {package: 0 for package in packages}
-            self.retry_button.setEnabled(False)
-            self.cancel_button.setEnabled(True)
-            self.continue_button.setEnabled(False)
-
-            self.set_row("scrcpy", "Downloading official release", "↓", "#2979FF")
-            self.status.setText("Updating scrcpy")
-            self.detail.setText(
-                "Downloading the latest stable Linux x86_64 release from the official scrcpy repository."
-            )
-            self.set_progress(18, "Checking the latest stable scrcpy release...")
-            self.write_log("Automatic scrcpy update started.")
-            self.write_log("Source: official Genymobile/scrcpy GitHub release.")
-            self.write_log("APT will not be used for scrcpy because Ubuntu/Debian may provide an obsolete version.")
-
-            self.process = QProcess(self)
-            self.process.setProcessChannelMode(QProcess.MergedChannels)
-            self.process.readyReadStandardOutput.connect(self.read_scrcpy_output)
-            self.process.finished.connect(self.scrcpy_update_finished)
-            self.process.errorOccurred.connect(self.process_error)
-            self.process.start(
-                sys.executable,
-                ["-m", "core.scrcpy_installer"],
-            )
-            return
+        system_packages = [
+            package for package in packages
+            if package != "phoneview-scrcpy"
+        ]
 
         self.installing = True
         self.cancelling = False
-        self.current_packages = packages
-        self.package_progress = {package: 0 for package in packages}
+        self.current_packages = system_packages
+        self.package_progress = {package: 0 for package in system_packages}
 
         self.retry_button.setEnabled(False)
         self.cancel_button.setEnabled(True)
         self.continue_button.setEnabled(False)
 
-        for package in packages:
+        if self.pending_scrcpy_build:
+            self.set_row("scrcpy", "Build required", "↓", "#2979FF")
+            self.write_log("PhoneView requires its pinned scrcpy 4.1 engine.")
+            self.write_log("New upstream scrcpy releases will not be checked or installed.")
+
+        for package in system_packages:
             key = self.package_to_key(package)
             if key:
                 self.set_row(key, "Queued", "↓", "#2979FF")
 
+        if not system_packages:
+            self.start_scrcpy_build()
+            return
+
         self.status.setText("Administrator permission required")
         self.detail.setText(
-            "A secure system authentication dialog will appear. "
-            "Enter your password there. PhoneView does not see, store, or log it."
+            "PhoneView will install the required Linux packages first. "
+            "After that, it will build the pinned scrcpy 4.1 PhoneView engine."
         )
         self.set_progress(20, "Waiting for the system authorization dialog...")
-        self.write_log("Automatic setup started.")
+        self.write_log("Automatic system setup started.")
+        self.write_log("System packages: " + ", ".join(system_packages))
         self.write_log(f"Using administrator authorization: {self.pkexec_path()}")
         self.write_log("Password security: authentication is handled by the operating system.")
         self.write_log("Requesting graphical system authorization (no Terminal window).")
@@ -430,6 +552,35 @@ class SetupWindow(QDialog):
         self.install_timer.setSingleShot(True)
         self.install_timer.timeout.connect(self.start_authorized_update)
         self.install_timer.start(700)
+
+    def start_scrcpy_build(self):
+        if self.process is not None or self.cancelling:
+            return
+
+        self.installing = True
+        self.retry_button.setEnabled(False)
+        self.cancel_button.setEnabled(True)
+        self.continue_button.setEnabled(False)
+
+        self.set_row("scrcpy", "Building PhoneView engine", "↓", "#2979FF")
+        self.status.setText("Building PhoneView scrcpy")
+        self.detail.setText(
+            "Building pinned scrcpy 4.1 with the native PhoneView mapping editor."
+        )
+        self.set_progress(18, "Preparing the pinned scrcpy 4.1 build...")
+        self.write_log("PhoneView scrcpy build started.")
+        self.write_log("Pinned source: Genymobile/scrcpy v4.1.")
+        self.write_log("Automatic upstream scrcpy updates are disabled.")
+
+        self.process = QProcess(self)
+        self.process.setProcessChannelMode(QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.read_scrcpy_output)
+        self.process.finished.connect(self.scrcpy_build_finished)
+        self.process.errorOccurred.connect(self.process_error)
+        self.process.start(
+            sys.executable,
+            ["-m", "core.scrcpy_installer"],
+        )
 
     def read_scrcpy_output(self):
         if not self.process:
@@ -447,7 +598,7 @@ class SetupWindow(QDialog):
             if line.startswith("PROGRESS:"):
                 try:
                     percent = int(float(line.split(":", 1)[1]))
-                    self.set_progress(max(18, min(96, percent)), f"Updating scrcpy... {percent}%")
+                    self.set_progress(max(18, min(96, percent)), f"Building PhoneView scrcpy... {percent}%")
                 except ValueError:
                     pass
                 continue
@@ -458,7 +609,7 @@ class SetupWindow(QDialog):
 
             self.write_log(line)
 
-    def scrcpy_update_finished(self, exit_code, exit_status):
+    def scrcpy_build_finished(self, exit_code, exit_status):
         self.read_scrcpy_output()
         if self.cancelling:
             return
@@ -467,8 +618,8 @@ class SetupWindow(QDialog):
 
         if exit_code != 0:
             self.fail_setup(
-                "scrcpy update failed",
-                "PhoneView could not install the official stable scrcpy release. "
+                "scrcpy build failed",
+                "PhoneView could not build its pinned scrcpy 4.1 engine. "
                 "Check the Activity log for the exact error.",
                 exit_code,
             )
@@ -479,14 +630,14 @@ class SetupWindow(QDialog):
         if not scrcpy_item["ok"]:
             self.fail_setup(
                 "scrcpy verification failed",
-                "The official installer finished, but PhoneView could not verify a usable scrcpy release.",
+                "The pinned PhoneView scrcpy build finished, but the engine could not be verified.",
                 1,
             )
             return
 
-        self.write_log("✓ Official stable scrcpy passed final verification.")
+        self.write_log("✓ Pinned PhoneView scrcpy 4.1 build passed final verification.")
         self.set_row("scrcpy", "Ready", "✓", "#4CAF50")
-        self.set_progress(92, "scrcpy is ready. Checking remaining system components...")
+        self.set_progress(92, "PhoneView scrcpy is ready. Checking remaining system components...")
 
         remaining = [
             item for item in items
@@ -500,12 +651,12 @@ class SetupWindow(QDialog):
         if not self.pkexec_path():
             self.fail_setup(
                 "System components still need authorization",
-                "scrcpy is updated successfully, but the remaining system packages require pkexec.",
+                "The pinned scrcpy engine is ready, but remaining system packages require pkexec.",
                 1,
             )
             return
 
-        # Re-enter the existing system-package installer for ADB/XCB.
+        # Continue with any remaining system packages such as XCB.
         self.current_packages = [item["package"] for item in remaining if item.get("package")]
         self.start_install()
 
@@ -545,6 +696,22 @@ class SetupWindow(QDialog):
         self.write_log(
             "No password is requested, read, stored, or handled by PhoneView."
         )
+        self.write_log("Waiting for the Polkit agent to register with the desktop session...")
+        QTimer.singleShot(1200, self.launch_authorized_update)
+
+    def launch_authorized_update(self):
+        if self.cancelling or not self.installing or self.process is not None:
+            return
+
+        pkexec = self.pkexec_path()
+        if not pkexec:
+            self.fail_setup(
+                "Administrator authorization is unavailable.",
+                "pkexec is no longer available on this system.",
+                1,
+            )
+            return
+
         self.write_log("Starting privileged package manager without a Terminal password prompt.")
 
         self.process = QProcess(self)
@@ -555,9 +722,8 @@ class SetupWindow(QDialog):
         self.process.started.connect(lambda: self.write_log("✓ System package installer process started."))
 
         self.process.start(
-            self.pkexec_path(),
+            pkexec,
             [
-                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
@@ -632,7 +798,11 @@ class SetupWindow(QDialog):
             return
 
         self.write_log("✓ Package lists updated successfully.")
-        packages = self.checker.missing_linux_packages()
+        packages = [
+            package
+            for package in self.checker.missing_linux_packages()
+            if package != "phoneview-scrcpy"
+        ]
         if not packages:
             self.cleanup_process()
             self.run_check()
@@ -663,7 +833,6 @@ class SetupWindow(QDialog):
         self.process.start(
             pkexec,
             [
-                "--disable-internal-agent",
                 "apt-get",
                 "-o", "Dpkg::Progress-Fancy=0",
                 "-o", "APT::Status-Fd=1",
@@ -687,12 +856,19 @@ class SetupWindow(QDialog):
             return
 
         self.installing = False
+        self.cleanup_process()
+
+        if self.pending_scrcpy_build:
+            self.pending_scrcpy_build = False
+            self.write_log("✓ System packages installed.")
+            self.set_progress(16, "System prerequisites are ready. Building PhoneView scrcpy...")
+            QTimer.singleShot(500, self.start_scrcpy_build)
+            return
+
         self.set_progress(95, "Installation finished. Verifying...")
         self.status.setText("Verifying installation")
         self.detail.setText("Checking every component again before PhoneView starts.")
         self.write_log("✓ Installation completed. Running final verification...")
-
-        self.cleanup_process()
         QTimer.singleShot(800, self.run_check)
 
     def finish_success(self):
@@ -762,6 +938,7 @@ class SetupWindow(QDialog):
         return {
             "adb": "adb",
             "scrcpy": "scrcpy",
+            "phoneview-scrcpy": "scrcpy",
             "libxcb-cursor0": "xcb",
         }.get(package)
 
@@ -789,13 +966,13 @@ class SetupWindow(QDialog):
     def find_graphical_auth_agent(self):
         """Return a known graphical Polkit agent executable, if installed."""
         candidates = [
+            "/usr/libexec/xfce-polkit",
+            "/usr/bin/xfce-polkit",
             "/usr/lib/policykit-1-gnome/polkit-gnome-authentication-agent-1",
             "/usr/libexec/polkit-gnome-authentication-agent-1",
             "/usr/libexec/polkit-mate-authentication-agent-1",
-            "/usr/libexec/xfce-polkit",
             "/usr/bin/lxpolkit",
             "/usr/bin/mate-polkit",
-            "/usr/bin/xfce-polkit",
         ]
 
         for path in candidates:
@@ -803,9 +980,9 @@ class SetupWindow(QDialog):
                 return path
 
         for command in (
+            "xfce-polkit",
             "polkit-gnome-authentication-agent-1",
             "polkit-mate-authentication-agent-1",
-            "xfce-polkit",
             "lxpolkit",
             "mate-polkit",
         ):
@@ -827,13 +1004,13 @@ class SetupWindow(QDialog):
 
         try:
             result = subprocess.run(
-                ["ps", "-u", str(os.getuid()), "-o", "comm="],
+                ["ps", "-u", str(os.getuid()), "-o", "args="],
                 capture_output=True,
                 text=True,
                 timeout=3,
             )
-            running = {line.strip() for line in result.stdout.splitlines() if line.strip()}
-            return any(name in running for name in process_names)
+            output = result.stdout.lower()
+            return any(name.lower() in output for name in process_names)
         except (OSError, subprocess.SubprocessError):
             return False
 
@@ -871,9 +1048,10 @@ class SetupWindow(QDialog):
 
             # Give the agent a moment to register itself with the current
             # session bus before pkexec sends its authorization request.
-            QTimer.singleShot(400, lambda: None)
+            QTimer.singleShot(1200, lambda: None)
 
             self.write_log("✓ Graphical Polkit agent started.")
+            self.write_log("Waiting briefly for the XFCE Polkit agent to register with the session bus.")
             return True
         except (OSError, RuntimeError) as exc:
             self.write_log(f"✗ Could not start graphical Polkit agent: {exc}")

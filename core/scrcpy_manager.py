@@ -22,33 +22,8 @@ class ScrcpyManager:
 
     @staticmethod
     def _find_scrcpy():
-        managed = ScrcpyInstaller.local_binary()
-        if managed:
-            return managed
-
-        exe = shutil.which("scrcpy")
-        if exe:
-            return exe
-
-        candidates = []
-        if os.name == "nt":
-            candidates = [
-                os.path.expandvars(r"%ProgramFiles%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%ProgramFiles(x86)%\scrcpy\scrcpy.exe"),
-                os.path.expandvars(r"%USERPROFILE%\scoop\apps\scrcpy\current\scrcpy.exe"),
-            ]
-        else:
-            candidates = [
-                "/usr/bin/scrcpy",
-                "/usr/local/bin/scrcpy",
-                os.path.expanduser("~/bin/scrcpy"),
-                "/snap/bin/scrcpy",
-            ]
-
-        for path in candidates:
-            if os.path.isfile(path) and os.access(path, os.X_OK):
-                return path
-        return None
+        # PhoneView intentionally uses only its pinned patched scrcpy build.
+        return ScrcpyInstaller.local_binary()
 
     def available(self):
         return bool(self.scrcpy)
@@ -108,23 +83,22 @@ class ScrcpyManager:
     def _supports(self, option):
         return option in self._help()
 
-    def _build_command(self, serial):
+    def _build_command(self, serial, project_name="Android Project"):
         cmd = [
             self.scrcpy,
             "-s",
             serial,
             "--window-title",
-            "PhoneView - Android",
+            " ".join(str(project_name).split()).strip()[:80] or "Android Project",
         ]
 
-        for option in ("--stay-awake", "--always-on-top"):
-            if self._supports(option):
-                cmd.append(option)
+        if self._supports("--stay-awake"):
+            cmd.append("--stay-awake")
 
-        if self._supports("--window-width"):
-            cmd += ["--window-width", "520"]
-        if self._supports("--window-height"):
-            cmd += ["--window-height", "820"]
+        # PhoneView owns the native window size. Do not force a fixed
+        # portrait 520x820 window onto devices whose video is landscape.
+        if self._supports("--always-on-top"):
+            cmd.append("--always-on-top")
 
         return cmd
 
@@ -166,24 +140,33 @@ class ScrcpyManager:
                 pass
         self._log_path = None
 
-    def start(self, serial):
+    def start(self, serial, project_name="Android Project"):
         self.stop()
         self.last_output = ""
 
         if not self.scrcpy:
             raise RuntimeError("scrcpy is not installed or cannot be found in PATH.")
 
-        env = os.environ.copy()
+        env = ScrcpyInstaller.runtime_environment()
+        # Always inject the bundled SDL3 directory explicitly for the child
+        # process. This also protects against launchers/symlinks started
+        # outside PhoneView's Python environment.
+        lib_dir = ScrcpyInstaller.runtime_library_dir()
+        if lib_dir:
+            old_ld = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = f"{lib_dir}:{old_ld}" if old_ld else lib_dir
+        env["PHONEVIEW_MAPPING"] = "1"
         if os.name != "nt" and not env.get("DISPLAY") and not env.get("WAYLAND_DISPLAY"):
             raise RuntimeError(
                 "No graphical display session was found. Start PhoneView from the desktop session."
             )
 
+
         self._open_log()
 
         try:
             self.process = subprocess.Popen(
-                self._build_command(serial),
+                self._build_command(serial, project_name),
                 stdout=self._log_file,
                 stderr=subprocess.STDOUT,
                 env=env,
@@ -237,3 +220,71 @@ class ScrcpyManager:
             self.last_output = output
 
         self._cleanup_log()
+
+
+    def window_exists(self, title):
+        """Return True when a native scrcpy window with the requested title exists."""
+        title = str(title or "").strip()
+        if not title:
+            return False
+
+        try:
+            result = subprocess.run(
+                ["wmctrl", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            if result.returncode == 0:
+                for line in result.stdout.splitlines():
+                    candidate = line.split(None, 3)[-1].strip() if line.split(None, 3) else ""
+                    if candidate == title or title in candidate or candidate in title:
+                        return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--name", title],
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    def focus_window(self, title):
+        """Best-effort focus for the unified PhoneView native window."""
+        title = "PhoneView"
+        if os.name == "nt":
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.FindWindowW(None, title)
+                if hwnd:
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    return True
+            except Exception:
+                return False
+        if os.name != "nt":
+            for command in (["wmctrl", "-a", title], ["xdotool", "search", "--name", title, "windowactivate"]):
+                try:
+                    result = subprocess.run(command, capture_output=True, timeout=2)
+                    if result.returncode == 0:
+                        return True
+                except (OSError, subprocess.SubprocessError):
+                    pass
+        return False
+
+    def adb_keyevent(self, serial, keycode):
+        if not serial:
+            raise RuntimeError("No Android device is selected.")
+        result = subprocess.run(
+            ["adb", "-s", serial, "shell", "input", "keyevent", str(keycode)],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "ADB key event failed.").strip())
+        return True

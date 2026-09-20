@@ -1,0 +1,129 @@
+#ifndef SC_PHONEVIEW_UI_H
+#define SC_PHONEVIEW_UI_H
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <SDL3/SDL_video.h>
+
+enum sc_phoneview_add_type {
+    SC_PHONEVIEW_ADD_KEYBOARD,
+    SC_PHONEVIEW_ADD_TAP,
+    SC_PHONEVIEW_ADD_TOGGLE,
+    SC_PHONEVIEW_ADD_MOUSE,
+    SC_PHONEVIEW_ADD_LOOK,
+    SC_PHONEVIEW_ADD_WHEEL,
+    SC_PHONEVIEW_ADD_JOYSTICK,
+};
+
+enum sc_phoneview_ui_action {
+    SC_PHONEVIEW_UI_ACTION_EDIT,
+    SC_PHONEVIEW_UI_ACTION_ADD,
+    SC_PHONEVIEW_UI_ACTION_SAVE,
+    SC_PHONEVIEW_UI_ACTION_DUPLICATE,
+    SC_PHONEVIEW_UI_ACTION_DELETE,
+    SC_PHONEVIEW_UI_ACTION_DONE,
+    SC_PHONEVIEW_UI_ACTION_CLOSE,
+};
+
+typedef void (*sc_phoneview_ui_action_cb)(
+    enum sc_phoneview_ui_action action,
+    void *userdata
+);
+
+struct sc_phoneview_control_edit {
+    char label[32];
+    char key[32];
+    char type[16];
+    char mouse_button[16];
+    char behavior[16];
+    char up_key[32];
+    char left_key[32];
+    char down_key[32];
+    char right_key[32];
+    char look_activation[16];
+    float size;
+    float sensitivity;
+    float speed;
+};
+
+struct sc_phoneview_ui;
+
+struct sc_phoneview_ui *
+sc_phoneview_ui_create(const char *title,
+                       int video_width,
+                       int video_height,
+                       bool always_on_top,
+                       bool decorated,
+                       sc_phoneview_ui_action_cb action_cb,
+                       void *userdata);
+
+void
+sc_phoneview_ui_destroy(struct sc_phoneview_ui *ui);
+
+SDL_Window *
+sc_phoneview_ui_get_video_window(struct sc_phoneview_ui *ui);
+
+void
+sc_phoneview_ui_show(struct sc_phoneview_ui *ui);
+
+void
+sc_phoneview_ui_hide(struct sc_phoneview_ui *ui);
+
+void
+sc_phoneview_ui_set_window_size(struct sc_phoneview_ui *ui,
+                                int video_width,
+                                int video_height);
+
+void
+sc_phoneview_ui_set_window_position(struct sc_phoneview_ui *ui,
+                                    int x,
+                                    int y);
+
+void
+sc_phoneview_ui_set_fullscreen(struct sc_phoneview_ui *ui,
+                               bool fullscreen);
+
+void
+sc_phoneview_ui_set_edit_mode(struct sc_phoneview_ui *ui,
+                              bool edit_mode);
+
+void
+sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
+                                 bool capture_mode);
+
+void
+sc_phoneview_ui_focus_video(struct sc_phoneview_ui *ui);
+
+
+int
+sc_phoneview_ui_get_add_type(struct sc_phoneview_ui *ui);
+
+void
+sc_phoneview_ui_set_capture_status(struct sc_phoneview_ui *ui,
+                                    const char *status);
+
+bool
+sc_phoneview_ui_edit_control(struct sc_phoneview_ui *ui,
+                             struct sc_phoneview_control_edit *control);
+
+bool
+sc_phoneview_ui_configure_new_control(
+    struct sc_phoneview_ui *ui,
+    int add_type,
+    struct sc_phoneview_control_edit *control);
+
+bool
+sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui);
+
+int
+sc_phoneview_ui_get_toolbar_height(struct sc_phoneview_ui *ui);
+
+void
+sc_phoneview_ui_get_video_size(struct sc_phoneview_ui *ui,
+                               int *width,
+                               int *height);
+
+void
+sc_phoneview_ui_pump_events(struct sc_phoneview_ui *ui);
+
+#endif

@@ -1,3 +1,9 @@
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -9,7 +15,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QLineEdit,
     QTextEdit,
+    QDialog,
     QVBoxLayout,
     QWidget,
 )
@@ -58,14 +66,14 @@ QListWidget#Devices::item { background: transparent; border: none; padding: 0; m
 QListWidget#Devices::item:selected { background: transparent; }
 
 QFrame#PhoneStage {
-    background: #0A0E14;
+    background: #070A0F;
     border: 1px solid #202A37;
     border-radius: 16px;
 }
-QLabel#PhoneGlyph {
-    color: #5D8EFF;
-    font-size: 58px;
-    font-weight: 900;
+QFrame#ControlPanel {
+    background: #0B1017;
+    border: 1px solid #202A37;
+    border-radius: 13px;
 }
 QLabel#StageState { color: #AAB5C4; font-size: 10px; font-weight: 800; }
 QLabel#StageHint { color: #647184; font-size: 9px; }
@@ -90,6 +98,34 @@ QPushButton#Primary {
 }
 QPushButton#Primary:hover { background: #3C82F0; border-color: #3C82F0; }
 QPushButton#Danger { color: #FF9292; }
+QPushButton#Control, QPushButton#ControlAccent {
+    min-height: 32px;
+    min-width: 54px;
+    padding: 0 8px;
+    font-size: 9px;
+    border-radius: 8px;
+}
+QPushButton#ControlDelete {
+    min-height: 32px;
+    min-width: 28px;
+    max-width: 28px;
+    padding: 0;
+    color: #FF7777;
+    background: #241316;
+    border-color: #4B252A;
+}
+QPushButton#ControlAccent {
+    background: #172B4A;
+    border-color: #315E99;
+    color: #8DB8FF;
+}
+QLineEdit {
+    background: #0B1017;
+    border: 1px solid #293443;
+    border-radius: 9px;
+    padding: 8px 10px;
+    color: #FFFFFF;
+}
 
 QProgressBar {
     background: #090D13;
@@ -170,6 +206,9 @@ class MainWindow(QMainWindow):
         self.devices = []
         self.connected_serial = None
         self.refresh_in_progress = False
+        self.project_name = "Android Project"
+        self.controls_edit_mode = False
+        self.custom_controls = self.load_custom_controls()
 
         self.build_ui()
 
@@ -212,9 +251,17 @@ class MainWindow(QMainWindow):
         self.header_state.setObjectName("StatusWarn")
         hl.addWidget(self.header_state)
 
+        self.project_input = QLineEdit("Android Project")
+        self.project_input.setPlaceholderText("Project name")
+        self.project_input.setToolTip("This name becomes the title of the Android mirror window.")
+        self.project_input.setMaximumWidth(190)
+        self.project_input.textChanged.connect(self.set_project_name)
+        hl.addWidget(self.project_input)
+
         self.refresh_button = QPushButton("↻  Refresh")
         self.refresh_button.clicked.connect(self.refresh_devices)
         hl.addWidget(self.refresh_button)
+
         main.addWidget(header)
 
         content = QHBoxLayout()
@@ -277,24 +324,29 @@ class MainWindow(QMainWindow):
         stage = QFrame()
         stage.setObjectName("PhoneStage")
         stage_l = QVBoxLayout(stage)
-        stage_l.setContentsMargins(20, 24, 20, 24)
+        stage_l.setContentsMargins(10, 10, 10, 10)
         stage_l.setSpacing(8)
-        stage_l.setAlignment(Qt.AlignCenter)
 
-        glyph = QLabel("▯")
-        glyph.setObjectName("PhoneGlyph")
-        glyph.setAlignment(Qt.AlignCenter)
-        stage_l.addWidget(glyph)
-
-        self.stage_state = QLabel("PHONE MIRROR READY")
-        self.stage_state.setObjectName("StageState")
-        self.stage_state.setAlignment(Qt.AlignCenter)
-        stage_l.addWidget(self.stage_state)
-
-        self.stage_hint = QLabel("The Android mirror opens in the scrcpy window.")
-        self.stage_hint.setObjectName("StageHint")
-        self.stage_hint.setAlignment(Qt.AlignCenter)
-        stage_l.addWidget(self.stage_hint)
+        # Mapping controls are rendered directly by the patched scrcpy engine.
+        self.mapping_workspace = QFrame()
+        self.mapping_workspace.setObjectName("MirrorHost")
+        workspace_l = QVBoxLayout(self.mapping_workspace)
+        workspace_l.setContentsMargins(28, 28, 28, 28)
+        workspace_l.setSpacing(12)
+        workspace_title = QLabel("SCRCPY MAPPING EDITOR")
+        workspace_title.setObjectName("Eyebrow")
+        workspace_l.addWidget(workspace_title)
+        self.mapping_status = QLabel(
+            "The mapping editor is rendered directly inside the patched scrcpy window.\n\n"
+            "When scrcpy opens, use the ✎ Edit button shown inside the phone window."
+        )
+        self.mapping_status.setObjectName("StageHint")
+        self.mapping_status.setAlignment(Qt.AlignCenter)
+        self.mapping_status.setWordWrap(True)
+        workspace_l.addStretch(1)
+        workspace_l.addWidget(self.mapping_status)
+        workspace_l.addStretch(1)
+        stage_l.addWidget(self.mapping_workspace, 1)
 
         hero_l.addWidget(stage, 1)
 
@@ -367,7 +419,7 @@ class MainWindow(QMainWindow):
         al.addWidget(self.log)
         main.addWidget(activity)
 
-        self.write_log("PhoneView started.")
+        self.write_log("PhoneView started. Android mirror is embedded in the PhoneView window.")
         if not self.adb.available():
             self.write_log("✗ ADB was not found.")
         if not self.scrcpy.available():
@@ -377,6 +429,10 @@ class MainWindow(QMainWindow):
             self.write_log("! Update scrcpy before starting screen mirroring.")
         self.engine_text.setText(self.scrcpy.version() or "scrcpy not detected")
         self.update_buttons()
+
+    def set_project_name(self, name):
+        clean = " ".join(name.split()).strip()
+        self.project_name = clean[:80] or "Android Project"
 
     def write_log(self, message):
         self.log.append(message)
@@ -428,8 +484,7 @@ class MainWindow(QMainWindow):
                 self.device_name.setText("No device selected")
                 self.device_meta.setText("Connect an Android phone with USB debugging enabled.")
                 self.info_text.setText("No device information yet.")
-                self.stage_state.setText("WAITING FOR PHONE")
-                self.stage_hint.setText("Connect USB • unlock phone • accept the ADB prompt")
+                self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nConnect an Android phone to create mappings.")
                 self.update_buttons()
                 return
 
@@ -469,25 +524,22 @@ class MainWindow(QMainWindow):
             self.header_state.setText("●  DEVICE READY")
             self.stream_state.setText("●  READY")
             self.stream_state.setObjectName("StatusGood")
-            self.stage_state.setText("READY TO MIRROR")
-            self.stage_hint.setText("Click Connect & View to open the live Android screen.")
+            self.mapping_status.setText("KEY MAPPING WORKSPACE\n\nAndroid screen: embedded in PhoneView.")
         elif device.state == "unauthorized":
             self.header_state.setText("●  AUTHORIZE PHONE")
             self.stream_state.setText("●  AUTHORIZATION REQUIRED")
             self.stream_state.setObjectName("StatusWarn")
-            self.stage_state.setText("USB AUTHORIZATION REQUIRED")
-            self.stage_hint.setText("Unlock the phone and accept the USB debugging dialog.")
+            self.mapping_status.setText("USB AUTHORIZATION REQUIRED\n\nUnlock the phone and accept the USB debugging dialog.")
         else:
             self.header_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setText(f"●  {device.state.upper()}")
             self.stream_state.setObjectName("StatusBad")
-            self.stage_state.setText("ADB DEVICE NOT READY")
-            self.stage_hint.setText(f"ADB reports: {device.state}")
+            self.mapping_status.setText(f"ADB DEVICE NOT READY\n\nADB reports: {device.state}")
 
         self.update_buttons()
 
     def status_label_fallback(self, text):
-        self.stage_hint.setText(text)
+        self.mapping_status.setText(text)
 
     def update_buttons(self):
         device = self.current_device()
@@ -528,8 +580,7 @@ class MainWindow(QMainWindow):
         serial = device.serial
         self.connect_button.setEnabled(False)
         self.progress.setVisible(True)
-        self.stage_state.setText("STARTING SCREEN...")
-        self.stage_hint.setText("Launching scrcpy and waiting for the mirror window.")
+        self.mapping_status.setText("OPENING ANDROID SCREEN...\n\nThe scrcpy window will stay separate.")
         self.stream_state.setText("●  CONNECTING")
         self.stream_state.setObjectName("StatusWarn")
         self.header_state.setText("●  CONNECTING")
@@ -547,32 +598,80 @@ class MainWindow(QMainWindow):
                 f"Android: {android}\nSDK: {sdk}\nSerial: {serial}"
             )
 
-            self.scrcpy.start(serial)
+            self.scrcpy.start(serial, self.project_name)
 
             if not self.scrcpy.running():
                 raise RuntimeError("scrcpy exited before the mirror window was created.")
 
             self.connected_serial = serial
             self.progress.setVisible(False)
-            self.stream_state.setText("●  SCREEN STREAMING")
+            self.stream_state.setText("●  SCREEN LIVE • EMBEDDED")
             self.stream_state.setObjectName("StatusGood")
-            self.stage_state.setText("SCREEN IS LIVE")
-            self.stage_hint.setText("The Android screen is open in the scrcpy window.")
             self.header_state.setText("●  CONNECTED")
-            self.write_log("✓ Android screen connected.")
+            self.write_log("✓ Android screen connected inside PhoneView.")
+            self.write_log("✓ Native PhoneView mapping editor is active inside scrcpy 4.1.")
             self.write_log(f"✓ scrcpy: {self.scrcpy.version() or 'running'}")
         except Exception as exc:
             self.connected_serial = None
             self.progress.setVisible(False)
             self.stream_state.setText("●  SCREEN UNAVAILABLE")
             self.stream_state.setObjectName("StatusBad")
-            self.stage_state.setText("MIRROR FAILED")
-            self.stage_hint.setText("The exact scrcpy error has been added to Live activity.")
+            self.mapping_status.setText("MAPPING WORKSPACE\n\nscrcpy could not start.\nSee Live activity for details.")
             self.header_state.setText("●  CONNECTION ERROR")
             self.write_log(f"✗ Connection failed: {exc}")
             QMessageBox.critical(self, "PhoneView", f"scrcpy could not start:\n\n{exc}")
         finally:
             self.update_buttons()
+
+    def load_custom_controls(self):
+        path = Path.home() / ".config" / "PhoneView" / "controls.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except (OSError, json.JSONDecodeError):
+            return []
+
+    def save_custom_controls(self):
+        path = Path.home() / ".config" / "PhoneView" / "controls.json"
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(self.custom_controls, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            self.write_log(f"! Could not save custom buttons: {exc}")
+
+    def add_custom_control(self):
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
+
+    def toggle_controls_edit(self):
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
+
+    def edit_custom_control(self, index):
+        self.write_log("! Mapping controls are edited directly inside the PhoneView scrcpy window.")
+
+    def remove_custom_control(self, index):
+        if index < 0 or index >= len(self.custom_controls):
+            return
+        label = str(self.custom_controls[index].get("label", "Button"))
+        self.custom_controls.pop(index)
+        self.save_custom_controls()
+        self.write_log(f"✓ Custom button removed from PhoneView config: {label}")
+
+    def focus_scrcpy(self):
+        try:
+            self.scrcpy.focus_window(self.project_name)
+        except Exception:
+            self.write_log("! Could not focus the PhoneView window.")
+
+    def send_key(self, keycode, label):
+        serial = self.connected_serial or (self.current_device().serial if self.current_device() else None)
+        if not serial or not self.scrcpy.running():
+            return
+        try:
+            self.scrcpy.adb_keyevent(serial, keycode)
+            self.write_log(f"✓ {label} sent to Android.")
+            self.focus_scrcpy()
+        except Exception as exc:
+            self.write_log(f"✗ {label}: {exc}")
 
     def check_stream(self):
         if self.connected_serial and not self.scrcpy.running():
@@ -581,21 +680,23 @@ class MainWindow(QMainWindow):
             if self.scrcpy.last_output:
                 self.write_log(self.scrcpy.last_output[-2500:])
             self.connected_serial = None
+            self.controls_edit_mode = False
             self.stream_state.setText("●  SCREEN STOPPED")
             self.stream_state.setObjectName("StatusWarn")
-            self.stage_state.setText("SCREEN STOPPED")
-            self.stage_hint.setText("The mirror process ended. Check Live activity for the exact error.")
+
+            self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
             self.header_state.setText("●  NOT CONNECTED")
             self.update_buttons()
 
     def disconnect(self):
         self.scrcpy.stop()
         self.connected_serial = None
+        self.controls_edit_mode = False
         self.progress.setVisible(False)
         self.stream_state.setText("●  OFFLINE")
         self.stream_state.setObjectName("StatusWarn")
-        self.stage_state.setText("PHONE MIRROR READY")
-        self.stage_hint.setText("The Android mirror opens in the scrcpy window.")
+
+        self.mapping_status.setText("PhoneView = mapping/configuration\nScrcpy = Android screen")
         self.header_state.setText("●  NO STREAM")
         self.write_log("Disconnected.")
         self.update_buttons()

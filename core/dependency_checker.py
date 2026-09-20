@@ -4,13 +4,34 @@ import shutil
 import subprocess
 import sys
 
-from core.scrcpy_installer import ScrcpyInstaller
+from core.scrcpy_installer import (
+    PHONEVIEW_BUILD_NAME,
+    PHONEVIEW_SCRCPY_VERSION,
+    ScrcpyInstaller,
+)
 
 
 class DependencyChecker:
     """Detect required components and flag obsolete scrcpy installations."""
 
-    MIN_SCRCPY_MAJOR = 2
+    MIN_SCRCPY_MAJOR = 4
+    SCRCPY_BUILD_PACKAGES = (
+        "meson",
+        "ninja-build",
+        "gcc",
+        "pkg-config",
+        "make",
+        "cmake",
+        "wget",
+        "tar",
+        "perl",
+        "libavcodec-dev",
+        "libavformat-dev",
+        "libavutil-dev",
+        "libswresample-dev",
+        "libpulse-dev",
+        "libasound2-dev",
+    )
 
     def __init__(self):
         self.platform = sys.platform
@@ -44,13 +65,7 @@ class DependencyChecker:
             return None
 
     def scrcpy_ok(self):
-        binary = ScrcpyInstaller.find_binary()
-        if not binary:
-            return False
-        version = self.scrcpy_version()
-        if version is None:
-            return False
-        return version[0] >= self.MIN_SCRCPY_MAJOR
+        return ScrcpyInstaller.is_phoneview_build() and ScrcpyInstaller.build_is_current()
 
     def check(self):
         if self.platform.startswith("linux"):
@@ -63,9 +78,9 @@ class DependencyChecker:
                 },
                 {
                     "id": "scrcpy",
-                    "name": "scrcpy (current release)",
+                    "name": f"PhoneView scrcpy engine ({PHONEVIEW_SCRCPY_VERSION})",
                     "ok": self.scrcpy_ok(),
-                    "package": "scrcpy",
+                    "package": "phoneview-scrcpy",
                 },
                 {
                     "id": "xcb",
@@ -85,7 +100,7 @@ class DependencyChecker:
                 },
                 {
                     "id": "scrcpy",
-                    "name": "scrcpy (current release)",
+                    "name": f"PhoneView scrcpy engine ({PHONEVIEW_SCRCPY_VERSION})",
                     "ok": self.scrcpy_ok(),
                     "package": "scrcpy",
                 },
@@ -110,11 +125,18 @@ class DependencyChecker:
         return []
 
     def missing_linux_packages(self):
-        return [
+        packages = [
             item["package"]
             for item in self.check()
-            if not item["ok"] and item.get("package")
+            if not item["ok"] and item.get("package") and item["package"] != "phoneview-scrcpy"
         ]
+
+        if not self.scrcpy_ok():
+            for package in self.SCRCPY_BUILD_PACKAGES:
+                if not self.package_installed_debian(package):
+                    packages.append(package)
+
+        return list(dict.fromkeys(packages))
 
     def has_missing(self):
         return any(not item["ok"] for item in self.check())
