@@ -79,8 +79,8 @@
     background-image: none;
     border-top: 1px solid #3e3e42;
     border-bottom: 1px solid #1c1c1c;
-    padding: 4px 6px;
-    min-height: 50px;
+    padding: 5px 7px;
+    min-height: 52px;
 }
 
 #phoneview-toolbar toolitem {
@@ -101,6 +101,7 @@
     min-height: 34px;
     font-weight: 600;
     font-size: 11px;
+    -GtkWidget-focus-padding: 0;
     box-shadow: none;
     -gtk-icon-shadow: none;
 }
@@ -258,8 +259,9 @@
 
 #phoneview-toolbar #phoneview-status {
     color: #858585;
-    min-width: 140px;
+    min-width: 180px;
     font-size: 11px;
+    text-overflow: ellipsis;
     font-weight: 500;
     padding: 0 12px;
 }
@@ -316,6 +318,10 @@
 #phoneview-toolbar #phoneview-duplicate-button { min-width: 102px; }
 #phoneview-toolbar #phoneview-delete-button { min-width: 80px; }
 #phoneview-toolbar #phoneview-done-button { min-width: 76px; }
+
+#phoneview-toolbar button label {
+    -gtk-icon-transform: none;
+}
 
 #phoneview-toolbar #phoneview-add-button {
     padding-left: 9px;
