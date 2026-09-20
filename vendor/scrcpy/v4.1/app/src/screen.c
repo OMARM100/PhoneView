@@ -5,7 +5,6 @@
 
 #include <assert.h>
 #include <ctype.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1059,24 +1058,6 @@ phoneview_draw_filled_circle(SDL_Renderer *renderer,
     }
 }
 
-static void
-phoneview_draw_circle_ring(SDL_Renderer *renderer,
-                           float cx, float cy, float radius,
-                           uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    const int segments = 32;
-    SDL_SetRenderDrawColor(renderer, r, g, b, a);
-
-    float previous_x = cx + radius;
-    float previous_y = cy;
-    for (int i = 1; i <= segments; ++i) {
-        float angle = (float) i * 6.28318530718f / (float) segments;
-        float x = cx + cosf(angle) * radius;
-        float y = cy + sinf(angle) * radius;
-        SDL_RenderLine(renderer, previous_x, previous_y, x, y);
-        previous_x = x;
-        previous_y = y;
-    }
-}
 
 static void
 phoneview_draw_text(SDL_Renderer *renderer, float x, float y,
@@ -1133,12 +1114,18 @@ phoneview_render_controls(struct sc_screen *screen) {
                 18, 30, 45,
                 selected ? 210 : 165);
 
-            phoneview_draw_circle_ring(
+            phoneview_draw_filled_circle(
                 screen->renderer,
                 cx, cy,
                 PHONEVIEW_JOYSTICK_RADIUS,
                 92, 140, 205,
                 selected ? 245 : 210);
+            phoneview_draw_filled_circle(
+                screen->renderer,
+                cx, cy,
+                PHONEVIEW_JOYSTICK_RADIUS - 3.f,
+                18, 30, 45,
+                selected ? 210 : 165);
 
             float dx = (control->active_right ? 1.f : 0.f)
                      - (control->active_left ? 1.f : 0.f);
@@ -1159,12 +1146,18 @@ phoneview_render_controls(struct sc_screen *screen) {
                 PHONEVIEW_JOYSTICK_KNOB_RADIUS,
                 60, 135, 245,
                 selected ? 245 : 220);
-            phoneview_draw_circle_ring(
+            phoneview_draw_filled_circle(
                 screen->renderer,
                 kx, ky,
                 PHONEVIEW_JOYSTICK_KNOB_RADIUS,
                 235, 245, 255,
                 230);
+            phoneview_draw_filled_circle(
+                screen->renderer,
+                kx, ky,
+                PHONEVIEW_JOYSTICK_KNOB_RADIUS - 3.f,
+                60, 135, 245,
+                selected ? 245 : 220);
 
             phoneview_draw_text(screen->renderer, cx - 4.f, cy - 36.f,
                                 "W");
