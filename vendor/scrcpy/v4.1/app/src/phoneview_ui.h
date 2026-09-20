@@ -70,6 +70,11 @@ int
 sc_phoneview_ui_get_toolbar_height(struct sc_phoneview_ui *ui);
 
 void
+sc_phoneview_ui_get_video_size(struct sc_phoneview_ui *ui,
+                               int *width,
+                               int *height);
+
+void
 sc_phoneview_ui_pump_events(struct sc_phoneview_ui *ui);
 
 #endif
