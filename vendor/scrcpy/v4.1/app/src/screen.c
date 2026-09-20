@@ -24,7 +24,7 @@
 #define DOWNCAST(SINK) container_of(SINK, struct sc_screen, frame_sink)
 
 #define PHONEVIEW_MAX_CONTROLS 64
-#define PHONEVIEW_TOOLBAR_H 54.f
+#define PHONEVIEW_TOOLBAR_H 58.f
 
 static void
 phoneview_config_path(char *path, size_t size) {
@@ -273,19 +273,18 @@ phoneview_hit_control(struct sc_screen *screen, float x, float y,
 
 static bool
 phoneview_toolbar_edit_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 10.f, 10.f, 76.f, 34.f);
+    return phoneview_point_in_rect(x, y, 100.f, 9.f, 78.f, 40.f);
 }
 
 static bool
 phoneview_toolbar_add_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 88.f, 10.f, 98.f, 34.f);
+    return phoneview_point_in_rect(x, y, 100.f, 9.f, 96.f, 40.f);
 }
 
 static bool
 phoneview_toolbar_done_hit(float x, float y) {
-    return phoneview_point_in_rect(x, y, 192.f, 10.f, 78.f, 34.f);
+    return phoneview_point_in_rect(x, y, 204.f, 9.f, 76.f, 40.f);
 }
-
 
 static struct sc_phoneview_control *
 phoneview_find_keyboard_control(struct sc_screen *screen, const char *label,
@@ -614,60 +613,78 @@ phoneview_render_overlay(struct sc_screen *screen) {
     struct sc_size size = sc_sdl_get_window_size(screen->window);
     float width = (float) size.width;
 
-    // Real PhoneView toolbar: it occupies the client area above the
-    // mirrored Android screen instead of being painted on top of it.
-    SDL_SetRenderDrawColor(screen->renderer, 10, 14, 22, 255);
+    /*
+     * PhoneView application toolbar.
+     *
+     * This is a dedicated client-area strip above the Android viewport.
+     * It is intentionally not drawn over the phone texture.
+     */
+    SDL_SetRenderDrawColor(screen->renderer, 20, 24, 31, 255);
     SDL_FRect toolbar = {0.f, 0.f, width, PHONEVIEW_TOOLBAR_H};
     SDL_RenderFillRect(screen->renderer, &toolbar);
 
-    if (screen->phoneview.edit_mode) {
-        phoneview_draw_box(screen->renderer, 10.f, 10.f, 72.f, 34.f,
-                           24, 31, 47, 255,
-                           105, 120, 145, 220);
-        phoneview_draw_box(screen->renderer, 88.f, 10.f, 98.f, 34.f,
-                           45, 115, 229, 255,
-                           140, 195, 255, 235);
-        phoneview_draw_box(screen->renderer, 192.f, 10.f, 78.f, 34.f,
-                           42, 128, 85, 255,
-                           145, 240, 175, 235);
+    /* Bottom separator */
+    SDL_SetRenderDrawColor(screen->renderer, 55, 62, 74, 255);
+    SDL_FRect separator = {0.f, PHONEVIEW_TOOLBAR_H - 1.f, width, 1.f};
+    SDL_RenderFillRect(screen->renderer, &separator);
 
-        phoneview_draw_text(screen->renderer, 21.f, 20.f, "PHONEVIEW");
-        phoneview_draw_text(screen->renderer, 101.f, 20.f, "ADD BUTTON");
-        phoneview_draw_text(screen->renderer, 210.f, 20.f, "DONE");
+    /* Application name */
+    phoneview_draw_text(screen->renderer, 14.f, 21.f, "PhoneView");
 
-        if (screen->phoneview.capture_mode) {
-            phoneview_draw_box(screen->renderer, 278.f, 10.f, 86.f, 34.f,
-                               92, 62, 28, 255,
-                               245, 190, 100, 235);
-            phoneview_draw_text(screen->renderer, 290.f, 20.f, "CAPTURE");
-        }
+    if (!screen->phoneview.edit_mode) {
+        /* Normal mode: one clear EDIT toolbar button. */
+        phoneview_draw_box(screen->renderer, 100.f, 9.f, 78.f, 40.f,
+                           38, 92, 168, 255,
+                           105, 160, 220, 255);
+        phoneview_draw_text(screen->renderer, 122.f, 24.f, "EDIT");
+        return;
+    }
 
-        float height = (float) size.height;
-        for (size_t i = 0; i < screen->phoneview.count; ++i) {
-            const struct sc_phoneview_control *control =
-                &screen->phoneview.controls[i];
+    /* Edit mode: standard left-to-right toolbar actions. */
+    phoneview_draw_box(screen->renderer, 100.f, 9.f, 96.f, 40.f,
+                       43, 107, 190, 255,
+                       125, 180, 235, 255);
+    phoneview_draw_text(screen->renderer, 113.f, 24.f, "ADD BUTTON");
 
-            float bx = control->x * width - 38.f;
-            float by = PHONEVIEW_TOOLBAR_H
-                     + control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
+    phoneview_draw_box(screen->renderer, 204.f, 9.f, 76.f, 40.f,
+                       48, 132, 83, 255,
+                       135, 220, 165, 255);
+    phoneview_draw_text(screen->renderer, 225.f, 24.f, "DONE");
 
-            bx = SDL_clamp(bx, 0.f, MAX(0.f, width - 76.f));
-            by = SDL_clamp(by, PHONEVIEW_TOOLBAR_H,
-                           MAX(PHONEVIEW_TOOLBAR_H, height - 42.f));
+    if (screen->phoneview.capture_mode) {
+        phoneview_draw_box(screen->renderer, 288.f, 9.f, 90.f, 40.f,
+                           122, 82, 35, 255,
+                           235, 190, 105, 255);
+        phoneview_draw_text(screen->renderer, 300.f, 24.f, "CAPTURE");
+    }
 
-            phoneview_draw_box(screen->renderer, bx, by, 76.f, 42.f,
-                               32, 115, 229, 220,
-                               255, 255, 255, 210);
-            phoneview_draw_text(screen->renderer, bx + 8.f, by + 17.f,
-                                control->label);
-        }
-    } else {
-        phoneview_draw_box(screen->renderer, 10.f, 10.f, 76.f, 34.f,
-                           45, 115, 229, 255,
-                           140, 195, 255, 235);
-        phoneview_draw_text(screen->renderer, 25.f, 20.f, "EDIT");
+    /* A subtle edit-state indicator at the right side. */
+    if (!screen->phoneview.capture_mode) {
+        phoneview_draw_text(screen->renderer, 300.f, 24.f,
+                            "Edit mode");
+    }
+
+    float height = (float) size.height;
+    for (size_t i = 0; i < screen->phoneview.count; ++i) {
+        const struct sc_phoneview_control *control =
+            &screen->phoneview.controls[i];
+
+        float bx = control->x * width - 38.f;
+        float by = PHONEVIEW_TOOLBAR_H
+                 + control->y * (height - PHONEVIEW_TOOLBAR_H) - 21.f;
+
+        bx = SDL_clamp(bx, 0.f, MAX(0.f, width - 76.f));
+        by = SDL_clamp(by, PHONEVIEW_TOOLBAR_H,
+                       MAX(PHONEVIEW_TOOLBAR_H, height - 42.f));
+
+        phoneview_draw_box(screen->renderer, bx, by, 76.f, 42.f,
+                           32, 115, 229, 220,
+                           255, 255, 255, 210);
+        phoneview_draw_text(screen->renderer, bx + 8.f, by + 17.f,
+                            control->label);
     }
 }
+
 static bool
 phoneview_begin_or_finish(struct sc_screen *screen, float x, float y) {
     if (!screen->phoneview.edit_mode) {
@@ -749,10 +766,19 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         float x = event->button.x;
         float y = event->button.y;
 
-        if (screen->phoneview.edit_mode && screen->phoneview.capture_mode) {
-            if (y < PHONEVIEW_TOOLBAR_H) {
-                return false;
+        /*
+         * Toolbar owns every mouse click in its client-area strip.
+         * Never let toolbar clicks fall through to the Android viewport.
+         */
+        if (y >= 0.f && y < PHONEVIEW_TOOLBAR_H) {
+            if (event->button.button == SDL_BUTTON_LEFT
+                    && phoneview_begin_or_finish(screen, x, y)) {
+                return true;
             }
+            return true;
+        }
+
+        if (screen->phoneview.edit_mode && screen->phoneview.capture_mode) {
             phoneview_capture_mouse(screen, event->button.button);
             return true;
         }
@@ -772,11 +798,6 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 phoneview_save_controls(screen);
                 return true;
             }
-        }
-
-        if (event->button.button == SDL_BUTTON_LEFT
-                && phoneview_begin_or_finish(screen, x, y)) {
-            return true;
         }
 
         if (event->button.button == SDL_BUTTON_LEFT
