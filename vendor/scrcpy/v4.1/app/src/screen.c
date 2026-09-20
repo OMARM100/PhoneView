@@ -318,7 +318,7 @@ static bool
 phoneview_point_in_resize_handle(float x, float y,
                                   float cx, float cy,
                                   float w, float h) {
-    const float handle = 12.f;
+    const float handle = 18.f;
     float hx = cx + w / 2.f;
     float hy = cy + h / 2.f;
     return phoneview_point_in_rect(
@@ -343,6 +343,56 @@ static float
 phoneview_control_height(const struct sc_phoneview_control *control) {
     return PHONEVIEW_CONTROL_H * phoneview_control_size(control);
 }
+
+static bool
+phoneview_resize_handle_hit(struct sc_screen *screen,
+                            size_t index,
+                            float x,
+                            float y) {
+    if (!screen || index >= screen->phoneview.count
+            || screen->rect.w <= 0.f || screen->rect.h <= 0.f) {
+        return false;
+    }
+
+    const struct sc_phoneview_control *control =
+        &screen->phoneview.controls[index];
+    float scale = phoneview_control_size(control);
+    float cx = control->x * screen->rect.w;
+    float cy = control->y * screen->rect.h;
+    float cw;
+    float ch;
+    float bx;
+    float by;
+
+    if (!strcmp(control->type, "joystick")) {
+        cw = PHONEVIEW_JOYSTICK_RADIUS * 2.f * scale;
+        ch = cw;
+        bx = cx - cw / 2.f;
+        by = cy - ch / 2.f;
+    } else {
+        cw = PHONEVIEW_CONTROL_W * scale;
+        ch = PHONEVIEW_CONTROL_H * scale;
+        bx = cx - cw / 2.f;
+        by = cy - ch / 2.f;
+
+        /* Match the actual render-time clamping exactly. */
+        bx = SDL_clamp(
+            bx,
+            0.f,
+            MAX(0.f, screen->rect.w - cw));
+        by = SDL_clamp(
+            by,
+            0.f,
+            MAX(0.f, screen->rect.h - ch));
+
+        cx = bx + cw / 2.f;
+        cy = by + ch / 2.f;
+    }
+
+    return phoneview_point_in_resize_handle(
+        x, y, cx, cy, cw, ch);
+}
+
 
 static void
 phoneview_clamp_control_position(struct sc_phoneview_control *control,
@@ -1697,6 +1747,29 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
         float local_x = event->button.x - screen->rect.x;
         float local_y = event->button.y - screen->rect.y;
 
+        if (event->button.button == SDL_BUTTON_LEFT
+                && !screen->phoneview.capture_mode
+                && screen->phoneview.selected_index >= 0
+                && (size_t) screen->phoneview.selected_index
+                   < screen->phoneview.count
+                && phoneview_resize_handle_hit(
+                    screen,
+                    (size_t) screen->phoneview.selected_index,
+                    local_x,
+                    local_y)) {
+            screen->phoneview.resizing = true;
+            screen->phoneview.resize_index =
+                screen->phoneview.selected_index;
+            screen->phoneview.dragging = false;
+            screen->phoneview.drag_index = -1;
+            screen->phoneview.last_click_index = -1;
+            screen->phoneview.last_click_time = 0;
+            sc_phoneview_ui_set_capture_status(
+                screen->phoneview.ui,
+                "Resize control  •  drag the corner");
+            return true;
+        }
+
         int index = phoneview_hit_control(
             screen,
             local_x,
@@ -1860,35 +1933,37 @@ phoneview_handle_event(struct sc_screen *screen, const SDL_Event *event) {
                 struct sc_phoneview_control *control =
                     &screen->phoneview.controls[index];
 
+                float local_x =
+                    event->motion.x - screen->rect.x;
+                float local_y =
+                    event->motion.y - screen->rect.y;
                 float cx = control->x * screen->rect.w;
                 float cy = control->y * screen->rect.h;
-                float distance = SDL_sqrtf(
-                    (event->motion.x - screen->rect.x - cx)
-                    * (event->motion.x - screen->rect.x - cx)
-                    + (event->motion.y - screen->rect.y - cy)
-                    * (event->motion.y - screen->rect.y - cy));
 
-                if (distance > 2.f) {
-                    if (!strcmp(control->type, "joystick")) {
-                        control->size = SDL_clamp(
-                            distance / PHONEVIEW_JOYSTICK_RADIUS,
-                            0.5f, 3.f);
-                    } else {
-                        float dx = SDL_fabsf(
-                            event->motion.x - screen->rect.x - cx);
-                        float dy = SDL_fabsf(
-                            event->motion.y - screen->rect.y - cy);
-                        float base_x = PHONEVIEW_CONTROL_W / 2.f;
-                        float base_y = PHONEVIEW_CONTROL_H / 2.f;
-                        float scale_x = dx / MAX(4.f, base_x);
-                        float scale_y = dy / MAX(4.f, base_y);
-                        control->size = SDL_clamp(
-                            MAX(scale_x, scale_y),
-                            0.5f, 3.f);
-                    }
-                    screen->phoneview.selected_index = index;
-                    sc_screen_render(screen, false);
+                if (!strcmp(control->type, "joystick")) {
+                    float distance = SDL_sqrtf(
+                        (local_x - cx) * (local_x - cx)
+                        + (local_y - cy) * (local_y - cy));
+                    control->size = SDL_clamp(
+                        distance / PHONEVIEW_JOYSTICK_RADIUS,
+                        0.5f, 3.f);
+                } else {
+                    float dx = SDL_fabsf(local_x - cx);
+                    float dy = SDL_fabsf(local_y - cy);
+                    float base_x = PHONEVIEW_CONTROL_W / 2.f;
+                    float base_y = PHONEVIEW_CONTROL_H / 2.f;
+
+                    control->size = SDL_clamp(
+                        MAX(dx / MAX(4.f, base_x),
+                            dy / MAX(4.f, base_y)),
+                        0.5f, 3.f);
                 }
+
+                phoneview_clamp_control_position(
+                    control, screen->rect.w, screen->rect.h);
+
+                screen->phoneview.selected_index = index;
+                sc_screen_render(screen, false);
             }
             return true;
         }
