@@ -36,13 +36,11 @@ class ScrcpyInstaller:
 
     @staticmethod
     def local_binary():
-        candidates = [
-            ScrcpyInstaller.target_root() / "bin" / "scrcpy",
-            BIN_ROOT / "scrcpy-phoneview",
-        ]
-        for path in candidates:
-            if path.is_file() and os.access(path, os.X_OK):
-                return str(path)
+        # Never fall back to an old launcher/symlink from a previous build.
+        # The pinned PhoneView build is identified by PHONEVIEW_BUILD_NAME.
+        path = ScrcpyInstaller.target_root() / "bin" / "scrcpy"
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
         return None
 
     @staticmethod
