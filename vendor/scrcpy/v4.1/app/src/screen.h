@@ -67,8 +67,6 @@ struct sc_phoneview_state {
     int capture_stage;
     int drag_index;
     int resize_index;
-    float resize_start_size;
-    float resize_start_distance;
     int selected_index;
     uint64_t last_click_time;
     int last_click_index;
