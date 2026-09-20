@@ -604,6 +604,8 @@ phoneview_find_mouse_look_control(struct sc_screen *screen,
             &screen->phoneview.controls[i];
 
         if (!strcmp(control->type, "look")
+                && (!control->look_activation[0]
+                    || !strcmp(control->look_activation, "mouse"))
                 && !strcmp(control->mouse_button, button)) {
             if (index_out) *index_out = i;
             return control;
@@ -771,16 +773,13 @@ phoneview_handle_mapped_keyboard(struct sc_screen *screen,
             handled = true;
 
             if (key_down) {
-                if (control->source_down) {
-                    continue;
+                if (!control->source_down) {
+                    control->source_down = true;
+                    (void) phoneview_set_look_control_active(
+                        screen, control, i, !control->active);
                 }
-                control->source_down = true;
-                (void) phoneview_set_look_control_active(
-                    screen, control, i, true);
             } else {
                 control->source_down = false;
-                (void) phoneview_set_look_control_active(
-                    screen, control, i, false);
             }
             continue;
         }
@@ -921,15 +920,11 @@ phoneview_handle_mapped_mouse(struct sc_screen *screen,
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (!look->source_down) {
                 look->source_down = true;
-                if (!phoneview_set_look_control_active(
-                        screen, look, index, true)) {
-                    look->source_down = false;
-                }
+                (void) phoneview_set_look_control_active(
+                    screen, look, index, !look->active);
             }
         } else {
             look->source_down = false;
-            (void) phoneview_set_look_control_active(
-                screen, look, index, false);
         }
 
         return true;
