@@ -14,11 +14,11 @@
 struct sc_phoneview_ui {
     GtkWidget *window;
     GtkWidget *toolbar;
-    GtkToolItem *edit_button;
-    GtkToolItem *add_button;
-    GtkToolItem *done_button;
-    GtkToolItem *separator;
-    GtkToolItem *status_item;
+    GtkWidget *edit_button;
+    GtkWidget *add_button;
+    GtkWidget *save_button;
+    GtkWidget *done_button;
+    GtkWidget *separator;
     GtkWidget *status_label;
     GtkWidget *video_area;
 
@@ -39,19 +39,25 @@ phoneview_ui_emit(struct sc_phoneview_ui *ui,
 }
 
 static void
-phoneview_ui_on_edit(GtkToolButton *button, gpointer userdata) {
+phoneview_ui_on_edit(GtkButton *button, gpointer userdata) {
     (void) button;
     phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_EDIT);
 }
 
 static void
-phoneview_ui_on_add(GtkToolButton *button, gpointer userdata) {
+phoneview_ui_on_add(GtkButton *button, gpointer userdata) {
     (void) button;
     phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_ADD);
 }
 
 static void
-phoneview_ui_on_done(GtkToolButton *button, gpointer userdata) {
+phoneview_ui_on_save(GtkButton *button, gpointer userdata) {
+    (void) button;
+    phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_SAVE);
+}
+
+static void
+phoneview_ui_on_done(GtkButton *button, gpointer userdata) {
     (void) button;
     phoneview_ui_emit(userdata, SC_PHONEVIEW_UI_ACTION_DONE);
 }
@@ -74,11 +80,13 @@ phoneview_ui_update_visibility(struct sc_phoneview_ui *ui) {
         return;
     }
 
-    gtk_widget_set_visible(GTK_WIDGET(ui->edit_button), !ui->edit_mode);
-    gtk_widget_set_visible(GTK_WIDGET(ui->add_button), ui->edit_mode);
-    gtk_widget_set_visible(GTK_WIDGET(ui->done_button), ui->edit_mode);
-    gtk_widget_set_visible(GTK_WIDGET(ui->separator), ui->edit_mode);
-    gtk_widget_set_visible(GTK_WIDGET(ui->status_item),
+    gtk_widget_set_visible(ui->edit_button, !ui->edit_mode);
+    gtk_widget_set_visible(ui->add_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->save_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->done_button, ui->edit_mode);
+    gtk_widget_set_visible(ui->separator, ui->edit_mode);
+
+    gtk_widget_set_visible(ui->status_label,
                            ui->edit_mode && ui->capture_mode);
 
     if (!ui->edit_mode) {
@@ -137,45 +145,115 @@ sc_phoneview_ui_create(const char *title,
     GtkWidget *root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(ui->window), root);
 
-    ui->toolbar = gtk_toolbar_new();
-    gtk_toolbar_set_style(GTK_TOOLBAR(ui->toolbar), GTK_TOOLBAR_TEXT);
-    gtk_toolbar_set_icon_size(GTK_TOOLBAR(ui->toolbar), GTK_ICON_SIZE_BUTTON);
+    ui->toolbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_widget_set_name(ui->toolbar, "phoneview-toolbar");
     gtk_widget_set_size_request(ui->toolbar, -1,
                                 PHONEVIEW_UI_TOOLBAR_HEIGHT);
+    gtk_widget_set_margin_start(ui->toolbar, 8);
+    gtk_widget_set_margin_end(ui->toolbar, 8);
     gtk_box_pack_start(GTK_BOX(root), ui->toolbar,
                        FALSE, FALSE, 0);
 
-    ui->edit_button =
-        gtk_tool_button_new(NULL, "Edit");
-    gtk_tool_item_set_is_important(ui->edit_button, TRUE);
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), ui->edit_button, -1);
+    ui->edit_button = gtk_button_new_with_label("Edit");
+    ui->add_button = gtk_button_new_with_label("Add Button");
+    ui->save_button = gtk_button_new_with_label("Save");
+    ui->done_button = gtk_button_new_with_label("Done");
+    ui->separator = gtk_separator_new(GTK_ORIENTATION_VERTICAL);
+    ui->status_label = gtk_label_new("");
+
+    gtk_widget_set_name(ui->edit_button, "phoneview-edit-button");
+    gtk_widget_set_name(ui->add_button, "phoneview-add-button");
+    gtk_widget_set_name(ui->save_button, "phoneview-save-button");
+    gtk_widget_set_name(ui->done_button, "phoneview-done-button");
+    gtk_widget_set_name(ui->status_label, "phoneview-status");
+
+    GtkWidget *buttons[] = {
+        ui->edit_button,
+        ui->add_button,
+        ui->save_button,
+        ui->separator,
+        ui->done_button,
+    };
+
+    for (size_t i = 0; i < sizeof(buttons) / sizeof(buttons[0]); ++i) {
+        GtkWidget *button = buttons[i];
+        gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
+        if (button != ui->separator) {
+            gtk_widget_set_margin_start(button, 3);
+            gtk_widget_set_margin_end(button, 3);
+        }
+        gtk_box_pack_start(GTK_BOX(ui->toolbar), button,
+                           FALSE, FALSE, 0);
+    }
+
+    gtk_widget_set_halign(ui->status_label, GTK_ALIGN_END);
+    gtk_widget_set_valign(ui->status_label, GTK_ALIGN_CENTER);
+    gtk_box_pack_end(GTK_BOX(ui->toolbar), ui->status_label,
+                     FALSE, FALSE, 6);
+
     g_signal_connect(ui->edit_button, "clicked",
                      G_CALLBACK(phoneview_ui_on_edit), ui);
-
-    ui->add_button =
-        gtk_tool_button_new(NULL, "Add Button");
-    gtk_tool_item_set_is_important(ui->add_button, TRUE);
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), ui->add_button, -1);
     g_signal_connect(ui->add_button, "clicked",
                      G_CALLBACK(phoneview_ui_on_add), ui);
-
-    ui->separator = gtk_separator_tool_item_new();
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), ui->separator, -1);
-
-    ui->done_button =
-        gtk_tool_button_new(NULL, "Done");
-    gtk_tool_item_set_is_important(ui->done_button, TRUE);
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), ui->done_button, -1);
+    g_signal_connect(ui->save_button, "clicked",
+                     G_CALLBACK(phoneview_ui_on_save), ui);
     g_signal_connect(ui->done_button, "clicked",
                      G_CALLBACK(phoneview_ui_on_done), ui);
 
-    ui->status_item = gtk_tool_item_new();
-    gtk_tool_item_set_expand(ui->status_item, TRUE);
-    ui->status_label = gtk_label_new("");
-    gtk_widget_set_halign(ui->status_label, GTK_ALIGN_END);
-    gtk_widget_set_margin_end(ui->status_label, 12);
-    gtk_container_add(GTK_CONTAINER(ui->status_item), ui->status_label);
-    gtk_toolbar_insert(GTK_TOOLBAR(ui->toolbar), ui->status_item, -1);
+    GtkCssProvider *provider = gtk_css_provider_new();
+    const gchar *css =
+        "#phoneview-toolbar {"
+        " background-color: #17191d;"
+        " border-bottom: 1px solid #2b3038;"
+        " padding-top: 5px;"
+        " padding-bottom: 5px;"
+        "}"
+        "#phoneview-toolbar button {"
+        " color: #e8eaed;"
+        " background-color: #242830;"
+        " border: 1px solid #343a45;"
+        " border-radius: 7px;"
+        " padding: 6px 13px;"
+        " box-shadow: none;"
+        "}"
+        "#phoneview-toolbar button:hover {"
+        " background-color: #2d333d;"
+        "}"
+        "#phoneview-toolbar button:active {"
+        " background-color: #353d49;"
+        "}"
+        "#phoneview-toolbar #phoneview-add-button {"
+        " background-color: #2f6fed;"
+        " border-color: #4b84ee;"
+        "}"
+        "#phoneview-toolbar #phoneview-add-button:hover {"
+        " background-color: #3c7af0;"
+        "}"
+        "#phoneview-toolbar #phoneview-save-button {"
+        " background-color: #303842;"
+        "}"
+        "#phoneview-toolbar #phoneview-done-button {"
+        " background-color: #278a4b;"
+        " border-color: #35a15d;"
+        "}"
+        "#phoneview-toolbar separator {"
+        " margin: 0 7px;"
+        "}"
+        "#phoneview-status {"
+        " color: #aeb7c4;"
+        " padding-left: 10px;"
+        "}"
+        "#phoneview-toolbar button:disabled {"
+        " color: #6e7681;"
+        " background-color: #1d2025;"
+        "}";
+    gtk_css_provider_load_from_data(provider, css, -1, NULL);
+    GdkScreen *screen = gtk_widget_get_screen(ui->window);
+    gtk_style_context_add_provider_for_screen(
+        screen,
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
 
     ui->video_area = gtk_drawing_area_new();
     gtk_widget_set_hexpand(ui->video_area, TRUE);
