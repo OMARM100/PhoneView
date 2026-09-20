@@ -15,6 +15,20 @@ class DependencyChecker:
     """Detect required components and flag obsolete scrcpy installations."""
 
     MIN_SCRCPY_MAJOR = 4
+    SCRCPY_BUILD_PACKAGES = (
+        "meson",
+        "ninja-build",
+        "gcc",
+        "pkg-config",
+        "libsdl3-dev",
+        "libavcodec-dev",
+        "libavdevice-dev",
+        "libavformat-dev",
+        "libavutil-dev",
+        "libswresample-dev",
+        "libusb-1.0-0-dev",
+        "libv4l-dev",
+    )
 
     def __init__(self):
         self.platform = sys.platform
@@ -108,11 +122,18 @@ class DependencyChecker:
         return []
 
     def missing_linux_packages(self):
-        return [
+        packages = [
             item["package"]
             for item in self.check()
             if not item["ok"] and item.get("package")
         ]
+
+        if not self.scrcpy_ok():
+            for package in self.SCRCPY_BUILD_PACKAGES:
+                if not self.package_installed_debian(package):
+                    packages.append(package)
+
+        return list(dict.fromkeys(packages))
 
     def has_missing(self):
         return any(not item["ok"] for item in self.check())
