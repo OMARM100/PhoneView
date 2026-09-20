@@ -1,3 +1,6 @@
+/* PhoneView modification: based on Genymobile/scrcpy v4.1.
+ * Adds native PhoneView mapping state to the scrcpy screen window.
+ */
 #ifndef SC_SCREEN_H
 #define SC_SCREEN_H
 
