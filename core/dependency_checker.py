@@ -29,6 +29,8 @@ class DependencyChecker:
         "libavformat-dev",
         "libavutil-dev",
         "libswresample-dev",
+        "libpulse-dev",
+        "libasound2-dev",
     )
 
     def __init__(self):
