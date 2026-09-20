@@ -712,6 +712,7 @@ sc_phoneview_ui_create(const char *title,
     gtk_widget_set_name(ui->add_button, "phoneview-add-button");
     gtk_widget_set_valign(ui->add_button, GTK_ALIGN_CENTER);
     gtk_widget_set_can_focus(ui->add_button, FALSE);
+    phoneview_make_labels_single_line(ui->add_button);
 
     ui->save_button =
         phoneview_make_toolbar_button("Save",
@@ -757,6 +758,8 @@ sc_phoneview_ui_create(const char *title,
     ui->status_label = gtk_label_new("");
     gtk_label_set_xalign(GTK_LABEL(ui->status_label), 1.f);
     gtk_label_set_single_line_mode(GTK_LABEL(ui->status_label), TRUE);
+    gtk_label_set_ellipsize(GTK_LABEL(ui->status_label), PANGO_ELLIPSIZE_END);
+    gtk_widget_set_size_request(ui->status_label, 180, -1);
     gtk_label_set_ellipsize(GTK_LABEL(ui->status_label),
                             PANGO_ELLIPSIZE_END);
     gtk_widget_set_name(ui->status_label, "phoneview-status");
