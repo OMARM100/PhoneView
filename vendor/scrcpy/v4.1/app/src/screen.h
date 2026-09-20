@@ -38,9 +38,21 @@ struct sc_phoneview_control {
     char key[32];
     char type[16];
     char mouse_button[16];
+    char behavior[16];
+    char up_key[32];
+    char left_key[32];
+    char down_key[32];
+    char right_key[32];
     float x;
     float y;
+    float runtime_x;
+    float runtime_y;
     bool active;
+    bool source_down;
+    bool active_up;
+    bool active_left;
+    bool active_down;
+    bool active_right;
 };
 
 struct sc_phoneview_state {
@@ -49,6 +61,7 @@ struct sc_phoneview_state {
     bool edit_mode;
     bool capture_mode;
     bool dragging;
+    int capture_stage;
     int drag_index;
     struct sc_phoneview_control controls[64];
     size_t count;
