@@ -97,7 +97,7 @@ class DependencyChecker:
                 },
                 {
                     "id": "scrcpy",
-                    "name": "scrcpy (current release)",
+                    "name": f"PhoneView scrcpy engine ({PHONEVIEW_SCRCPY_VERSION})",
                     "ok": self.scrcpy_ok(),
                     "package": "scrcpy",
                 },
