@@ -71,18 +71,6 @@ class DependencyChecker:
                     "ok": self.package_installed_debian("libxcb-cursor0"),
                     "package": "libxcb-cursor0",
                 },
-                {
-                    "id": "wmctrl",
-                    "name": "X11 window control (wmctrl)",
-                    "ok": self.command_exists("wmctrl"),
-                    "package": "wmctrl",
-                },
-                {
-                    "id": "xdotool",
-                    "name": "X11 input/window helper (xdotool)",
-                    "ok": self.command_exists("xdotool"),
-                    "package": "xdotool",
-                },
             ]
 
         if self.platform == "darwin":
