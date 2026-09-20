@@ -1,3 +1,4 @@
+#ifdef __linux__
 #include "phoneview_ui.h"
 
 #include <stdlib.h>
@@ -179,7 +180,7 @@ sc_phoneview_ui_create(const char *title,
     ui->video_area = gtk_drawing_area_new();
     gtk_widget_set_hexpand(ui->video_area, TRUE);
     gtk_widget_set_vexpand(ui->video_area, TRUE);
-    gtk_widget_set_can_focus(ui->video_area, FALSE);
+    gtk_widget_set_can_focus(ui->video_area, TRUE);
     gtk_box_pack_start(GTK_BOX(root), ui->video_area,
                        TRUE, TRUE, 0);
 
@@ -246,6 +247,7 @@ sc_phoneview_ui_show(struct sc_phoneview_ui *ui) {
 
     gtk_widget_show(ui->window);
     gtk_window_present(GTK_WINDOW(ui->window));
+    gtk_widget_grab_focus(ui->video_area);
 }
 
 void
@@ -311,6 +313,10 @@ sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
 
     ui->capture_mode = capture_mode;
     phoneview_ui_update_visibility(ui);
+
+    if (capture_mode && ui->video_area) {
+        gtk_widget_grab_focus(ui->video_area);
+    }
 }
 
 bool
@@ -334,3 +340,109 @@ sc_phoneview_ui_pump_events(struct sc_phoneview_ui *ui) {
         gtk_main_iteration_do(FALSE);
     }
 }
+
+#else
+
+#include "phoneview_ui.h"
+#include <stdlib.h>
+
+struct sc_phoneview_ui {
+    int unused;
+};
+
+struct sc_phoneview_ui *
+sc_phoneview_ui_create(const char *title,
+                       int video_width,
+                       int video_height,
+                       bool always_on_top,
+                       bool decorated,
+                       sc_phoneview_ui_action_cb action_cb,
+                       void *userdata) {
+    (void) title;
+    (void) video_width;
+    (void) video_height;
+    (void) always_on_top;
+    (void) decorated;
+    (void) action_cb;
+    (void) userdata;
+    return NULL;
+}
+
+void
+sc_phoneview_ui_destroy(struct sc_phoneview_ui *ui) {
+    free(ui);
+}
+
+SDL_Window *
+sc_phoneview_ui_get_video_window(struct sc_phoneview_ui *ui) {
+    (void) ui;
+    return NULL;
+}
+
+void
+sc_phoneview_ui_show(struct sc_phoneview_ui *ui) {
+    (void) ui;
+}
+
+void
+sc_phoneview_ui_hide(struct sc_phoneview_ui *ui) {
+    (void) ui;
+}
+
+void
+sc_phoneview_ui_set_window_size(struct sc_phoneview_ui *ui,
+                                int video_width,
+                                int video_height) {
+    (void) ui;
+    (void) video_width;
+    (void) video_height;
+}
+
+void
+sc_phoneview_ui_set_window_position(struct sc_phoneview_ui *ui,
+                                    int x,
+                                    int y) {
+    (void) ui;
+    (void) x;
+    (void) y;
+}
+
+void
+sc_phoneview_ui_set_fullscreen(struct sc_phoneview_ui *ui,
+                               bool fullscreen) {
+    (void) ui;
+    (void) fullscreen;
+}
+
+void
+sc_phoneview_ui_set_edit_mode(struct sc_phoneview_ui *ui,
+                              bool edit_mode) {
+    (void) ui;
+    (void) edit_mode;
+}
+
+void
+sc_phoneview_ui_set_capture_mode(struct sc_phoneview_ui *ui,
+                                 bool capture_mode) {
+    (void) ui;
+    (void) capture_mode;
+}
+
+bool
+sc_phoneview_ui_is_edit_mode(struct sc_phoneview_ui *ui) {
+    (void) ui;
+    return false;
+}
+
+int
+sc_phoneview_ui_get_toolbar_height(struct sc_phoneview_ui *ui) {
+    (void) ui;
+    return 0;
+}
+
+void
+sc_phoneview_ui_pump_events(struct sc_phoneview_ui *ui) {
+    (void) ui;
+}
+
+#endif
